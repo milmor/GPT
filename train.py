@@ -63,7 +63,13 @@ def train(args):
                 depth=hparams['depth'], rate=hparams['rate'], 
                 initializer=hparams['initializer'])
 
-    optimizer = tf.keras.optimizers.Adam(hparams['learning_rate'], 
+    if hparams['decay_lr']:
+        lr = tf.keras.optimizers.schedules.CosineDecay(hparams['learning_rate'], 
+                                                       hparams['decay_steps'])
+    else:
+        lr = hparams['learning_rate']
+
+    optimizer = tf.keras.optimizers.Adam(lr, 
                                          beta_1=hparams['beta_1'], 
                                          beta_2=hparams['beta_2'])
 
@@ -71,6 +77,10 @@ def train(args):
 
     if build_vocab:
         generate_vocab(file_pattern, vocab_size, vocab_file)
+        print(f'Build {vocab_file}')
+    else:
+        tokenizer = text.BertTokenizer(vocab_file)
+        print(f'{vocab_file} loaded')
 
     dataset = create_ds(file_pattern, hparams['batch_size'], hparams['maxlen'], vocab_file)
     tokenizer = text.BertTokenizer(vocab_file)
@@ -98,6 +108,10 @@ def train(args):
             predictions = model(inp, training=True)
             loss = loss_function(tar, predictions)
         gradients = tape.gradient(loss, model.trainable_variables)
+        
+        if hparams['clip_global_norm'] != 0:
+            gradients, _ = tf.clip_by_global_norm(gradients, hparams['clip_global_norm'])
+        
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
         train_loss_avg(loss)
 
