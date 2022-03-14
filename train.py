@@ -99,6 +99,8 @@ def train(args):
     if ckpt_manager.latest_checkpoint:    
         ckpt.restore(ckpt_manager.latest_checkpoint)
         print(f'Checkpoint restored from {ckpt_manager.latest_checkpoint} at epoch {int(ckpt.epoch)}')
+        ckpt.epoch.assign_add(1)
+    start_epoch = int(ckpt.epoch)
 
     train_loss_avg = tf.keras.metrics.Mean(name='train_loss')
 
@@ -109,13 +111,13 @@ def train(args):
             loss = loss_function(tar, predictions)
         gradients = tape.gradient(loss, model.trainable_variables)
         
-        if hparams['clip_global_norm'] != 0:
-            gradients, _ = tf.clip_by_global_norm(gradients, hparams['clip_global_norm'])
+        if hparams['clip_global_norm']:
+            gradients, _ = tf.clip_by_global_norm(gradients, hparams['clip_norm'])
         
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
         train_loss_avg(loss)
 
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         start = time.time()
         for inp, tar in dataset:
             train_step(inp, tar)
@@ -123,7 +125,7 @@ def train(args):
         print(f'\nTime taken for epoch {epoch} is: {time.time() - start:.2f} secs')
         print(f'Loss: {train_loss_avg.result():.4f}')
         generated_text = sample(model, context, hparams['maxlen'], tokenizer)
-        print(f'Generated text:\n{generated_text}')
+        print(f'Sample text:\n{generated_text}')
         
         with writer.as_default():
             tf.summary.scalar('train_loss', train_loss_avg.result(), step=epoch)
@@ -133,6 +135,8 @@ def train(args):
         if epoch % ckpt_interval == 0:
             ckpt_manager.save(epoch)
             print(f'Checkpoint saved at epoch {epoch}\n') 
+
+        ckpt.epoch.assign_add(1)
 
 
 def main():
