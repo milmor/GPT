@@ -37,10 +37,9 @@ def sample(model, context, maxlen, tokenizer, k=10):
    
     return out_text
 
-def generate_vocab(file_pattern, vocab_size, vocab_file='vocab.txt', batch_size=128):
+def build_vocabulary(file_pattern, vocab_size, vocab_file='vocab.txt', batch_size=128):
     filenames = glob.glob(file_pattern)
     text_ds = tf.data.TextLineDataset(filenames)
-    print(f'{len(filenames)} files')
     
     bert_tokenizer_params=dict(lower_case=False)
     reserved_tokens=['[PAD]', '[UNK]']
@@ -51,9 +50,10 @@ def generate_vocab(file_pattern, vocab_size, vocab_file='vocab.txt', batch_size=
         bert_tokenizer_params=bert_tokenizer_params
     )
     
+    print(f'Building vocabulary from {len(filenames)} files...')
     start = time.time()
     vocab = bert_vocab.bert_vocab_from_dataset(
-    text_ds.batch(batch_size).prefetch(AUTOTUNE),
+    text_ds.batch(batch_size, num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE),
     **bert_vocab_args
     )
     

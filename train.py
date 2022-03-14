@@ -34,7 +34,7 @@ def preprocess(raw_text, maxlen, vocab_file):
 def create_ds(file_pattern, batch_size, maxlen, vocab_file):
     text_paths = tf.data.Dataset.list_files(file_pattern)
     BUFFER_SIZE = tf.data.experimental.cardinality(text_paths)
-    print(f'{BUFFER_SIZE} files')
+    print(f'Train dataset size: {BUFFER_SIZE}')
     text_paths = text_paths.cache().shuffle(BUFFER_SIZE)
 
     dataset = text_paths.map(load_file, 
@@ -76,7 +76,7 @@ def train(args):
     loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
     if build_vocab:
-        generate_vocab(file_pattern, vocab_size, vocab_file)
+        build_vocabulary(file_pattern, hparams['vocab_size'], vocab_file)
         print(f'Build {vocab_file}')
     else:
         tokenizer = text.BertTokenizer(vocab_file)
@@ -122,10 +122,10 @@ def train(args):
         for inp, tar in dataset:
             train_step(inp, tar)
         
-        print(f'\nTime taken for epoch {epoch} is: {time.time() - start:.2f} secs')
+        print(f'\nTime taken for epoch {epoch} is {time.time() - start:.2f} secs')
         print(f'Loss: {train_loss_avg.result():.4f}')
-        generated_text = sample(model, context, hparams['maxlen'], tokenizer)
-        print(f'Sample text:\n{generated_text}')
+        sample_text = sample(model, context, hparams['maxlen'], tokenizer)
+        print(f'Sample text: \n{sample_text}')
         
         with writer.as_default():
             tf.summary.scalar('train_loss', train_loss_avg.result(), step=epoch)
