@@ -50,7 +50,7 @@ class MultiHeadAttention(layers.Layer):
         scaled_qk = tf.matmul(q, k, transpose_b=True) / tf.math.sqrt(dk)
         scaled_qk += (mask * -1e9)
 
-        attn = self.dropout1(tf.nn.softmax(scaled_qk, axis=-1) )
+        attn = self.dropout1(tf.nn.softmax(scaled_qk, axis=-1))
         attn = tf.matmul(attn, v) 
 
         attn = tf.transpose(attn, perm=[0, 2, 1, 3]) 
