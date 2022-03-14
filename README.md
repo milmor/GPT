@@ -36,6 +36,11 @@ Run `tensorboard --logdir ./`.
 
 Implementation notes:
 - WordPiece tokenizer
+- Cosine decay learning rate schedule
+- Clip gradients by global norm
+- Gaussian Error Linear Unit (GELU) activation
+- Adam with β1 = 0.9 and β2 = 0.95 
+
 
 ## Licence
 MIT
