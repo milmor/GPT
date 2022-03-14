@@ -1,0 +1,12 @@
+hparams = {'batch_size': 64,
+           'vocab_size': 20000,
+           'maxlen': 128,
+           'learning_rate': 0.001,
+           'beta_1': 0.9,
+           'beta_2': 0.95,
+           'emb_dim': 256,
+           'heads': 2,
+           'mlp_dim': 256,
+           'depth': 2,
+           'rate':  0.1,
+           'initializer': 'glorot_uniform'}
