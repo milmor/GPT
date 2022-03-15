@@ -1,5 +1,5 @@
 # GPT
-A simple implementation of [Generative Pretrained Transformer (GPT)](https://proceedings.neurips.cc/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf).
+A simple implementation of [GPT (Generative Pretrained Transformer)](https://proceedings.neurips.cc/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf).
 
 ## Dependencies
 - Python 3.7
@@ -9,15 +9,19 @@ A simple implementation of [Generative Pretrained Transformer (GPT)](https://pro
 
 ## Usage
 ### Train
-Use `--file_pattern=<file_pattern>` to provide the dataset path and file pattern.
+Use `--file_pattern=<file_pattern>` to provide the dataset path and file pattern. Use `--context=<context>` to provide context.
 ```
-python train.py --file_pattern=./dataset_path/*.txt
+python train.py --file_pattern=./dataset_path/*.txt --context=<context>
 ```
 
+Some other options:
+- Use `--build_vocab=True` to build a WordPiece vocabulary.
+
+
 ### Generate
-Use `--model_dir=<model_dir>` to provide the model directory name.
+Use `--model_dir=<model_dir>` and `--context=<context>` to provide the model directory name and context.
 ```
-python generate.py --model_dir=<model_dir>
+python generate.py --model_dir=<model_dir> --context=<context>
 ```
 
 ### Hparams setting
