@@ -1,6 +1,7 @@
 # GPT
 A simple implementation of [GPT (Generative Pretrained Transformer)](https://proceedings.neurips.cc/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf).
 
+
 ## Dependencies
 - Python 3.7
 - Tensorfow 2.8
@@ -16,7 +17,6 @@ python train.py --file_pattern=./dataset_path/*.txt --context=<context>
 
 Some other options:
 - Use `--build_vocab=True` to build a WordPiece vocabulary.
-
 
 ### Generate
 Use `--model_dir=<model_dir>` and `--context=<context>` to provide the model directory name and context.
@@ -39,8 +39,8 @@ Run `tensorboard --logdir ./`.
 - [minGPT](https://github.com/karpathy/minGPT)
 
 Implementation notes:
-- WordPiece tokenizer
-- Cosine decay learning rate schedule
+- WordPiece tokenization
+- Cosine learning rate decay
 - Clip gradients by global norm
 - Gaussian Error Linear Unit (GELU) activation
 - Adam with β1 = 0.9 and β2 = 0.95 
