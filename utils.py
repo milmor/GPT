@@ -32,8 +32,8 @@ def sample(model, context, maxlen, tokenizer, k=10):
 
         x = tf.concat([x, sample], axis=-1)
 
-    str_list = tokenizer.detokenize(x).numpy().astype('str')[0] 
-    out_text = ' '.join([_ for _ in str_list])
+    str_list = tokenizer.detokenize(x).numpy()[0] 
+    out_text = ' '.join([token.decode('utf-8') for token in str_list])
    
     return out_text
 
