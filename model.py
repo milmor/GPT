@@ -70,13 +70,13 @@ class TransformerBlock(layers.Layer):
             layers.Dense(embed_dim, kernel_initializer=initializer),
             layers.Dropout(rate)
         ])
-        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
-        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+        self.ln1 = layers.LayerNormalization(epsilon=1e-6)
+        self.ln2 = layers.LayerNormalization(epsilon=1e-6)
 
     def call(self, inputs):
-        x = self.layernorm1(inputs)
+        x = self.ln1(inputs)
         x = inputs + self.attn(x, x, x) 
-        x = x + self.mlp(self.layernorm2(x))
+        x = x + self.mlp(self.ln2(x))
         return x
     
     
@@ -105,8 +105,9 @@ class GPT(tf.keras.models.Model):
                  emb_dim=256, heads=4, mlp_dim=256, depth=4, 
                  rate=0.1, initializer='glorot_uniform'):
         super(GPT, self).__init__()
-        self.emb = TokenEmbedding(maxlen, vocab_size, 
+        self.tok_emb = TokenEmbedding(maxlen, vocab_size, 
                         emb_dim, rate=rate, initializer=initializer)
+        self.drop = layers.Dropout(rate)
         self.transformer = tf.keras.Sequential()
         for _ in range(depth):
             self.transformer.add(TransformerBlock(emb_dim, heads, 
@@ -115,7 +116,8 @@ class GPT(tf.keras.models.Model):
         self.out = layers.Dense(vocab_size, kernel_initializer=initializer)
                              
     def call(self, x):
-        x = self.emb(x)
+        x = self.tok_emb(x)
+        x = self.drop(x)
         x = self.transformer(x)
         x = self.layernorm(x)
         x = self.out(x)
