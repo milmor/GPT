@@ -15,7 +15,7 @@ class MultiHeadAttention(layers.Layer):
 
         assert model_dim % self.n_heads == 0
 
-        self.depth = model_dim // self.n_heads
+        self.head_dim = model_dim // self.n_heads
 
         self.wq = layers.Dense(model_dim, kernel_initializer=initializer)
         self.wk = layers.Dense(model_dim, kernel_initializer=initializer)
@@ -27,16 +27,11 @@ class MultiHeadAttention(layers.Layer):
         self.out_proj = layers.Dense(model_dim, kernel_initializer=initializer)
 
     def split_heads(self, x, batch_size):
-        x = tf.reshape(x, (batch_size, -1, self.n_heads, self.depth))
+        x = tf.reshape(x, (batch_size, -1, self.n_heads, self.head_dim))
         return tf.transpose(x, perm=[0, 2, 1, 3])
-    
-    def get_mask(self, size):
-        look_ahead_mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
-        return look_ahead_mask
 
-    def call(self, q, k, v):
+    def call(self, q, k, v, mask):
         batch_size = tf.shape(q)[0]
-        mask = self.get_mask(tf.shape(q)[1])
 
         q = self.wq(q)  
         k = self.wk(k)  
@@ -46,9 +41,12 @@ class MultiHeadAttention(layers.Layer):
         k = self.split_heads(k, batch_size)  
         v = self.split_heads(v, batch_size) 
 
-        dk = tf.cast(tf.shape(k)[-1], tf.float32)
-        scaled_qk = tf.matmul(q, k, transpose_b=True) / tf.math.sqrt(dk)
-        scaled_qk += (mask * -1e9)
+        dh = tf.cast(self.head_dim, tf.float32)
+        qk = tf.matmul(q, k, transpose_b=True)
+        scaled_qk =  qk / tf.math.sqrt(dh)
+        
+        if mask is not None:
+            scaled_qk += (mask * -1e9) 
 
         attn = self.dropout1(tf.nn.softmax(scaled_qk, axis=-1))
         attn = tf.matmul(attn, v) 
@@ -73,9 +71,9 @@ class TransformerBlock(layers.Layer):
         self.ln1 = layers.LayerNormalization(epsilon=1e-6)
         self.ln2 = layers.LayerNormalization(epsilon=1e-6)
 
-    def call(self, inputs):
+    def call(self, inputs, mask):
         x = self.ln1(inputs)
-        x = inputs + self.attn(x, x, x) 
+        x = inputs + self.attn(x, x, x, mask) 
         x = x + self.mlp(self.ln2(x))
         return x
     
@@ -105,20 +103,44 @@ class GPT(tf.keras.models.Model):
                  emb_dim=256, heads=4, mlp_dim=256, depth=4, 
                  rate=0.1, initializer='glorot_uniform'):
         super(GPT, self).__init__()
+        self.depth = depth
         self.tok_emb = TokenEmbedding(maxlen, vocab_size, 
                         emb_dim, rate=rate, initializer=initializer)
         self.drop = layers.Dropout(rate)
-        self.transformer = tf.keras.Sequential()
-        for _ in range(depth):
-            self.transformer.add(TransformerBlock(emb_dim, heads, 
-                        mlp_dim, rate=rate, initializer=initializer))
+            
+        self.transformer = [TransformerBlock(emb_dim, heads, 
+                                mlp_dim, rate=rate, initializer=initializer)
+                            for _ in range(depth)]
+
         self.layernorm = layers.LayerNormalization(epsilon=1e-6)
         self.out = layers.Dense(vocab_size, kernel_initializer=initializer)
-                             
+        
+    def get_padding_mask(self, seq):
+        seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
+
+        # add extra dimensions to add the padding
+        # to the attention logits.
+        return seq[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, 1, seq_len)
+
+    def get_attention_mask(self, size):
+        mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
+        return mask  # (seq_len, seq_len)
+    
+    def create_mask(self, x):
+        attn_mask = self.get_attention_mask(tf.shape(x)[1])
+        padding_mask = self.get_padding_mask(x)
+        attn_mask = tf.maximum(padding_mask, attn_mask)
+        return attn_mask
+                       
     def call(self, x):
+        mask = self.create_mask(x)
+ 
         x = self.tok_emb(x)
         x = self.drop(x)
-        x = self.transformer(x)
+
+        for i in range(self.depth):
+            x = self.transformer[i](x, mask)
+
         x = self.layernorm(x)
         x = self.out(x)
         return x
