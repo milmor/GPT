@@ -59,17 +59,17 @@ class MultiHeadAttention(layers.Layer):
     
     
 class TransformerBlock(layers.Layer):
-    def __init__(self, embed_dim, n_heads, mlp_dim, 
-                 rate=0.1, initializer='glorot_uniform'):
+    def __init__(self, emb_dim, n_heads, mlp_dim, 
+                 rate=0.1, initializer='glorot_uniform', eps=1e-6, activation='gelu'):
         super(TransformerBlock, self).__init__()
-        self.attn = MultiHeadAttention(embed_dim, n_heads, initializer=initializer)
+        self.attn = MultiHeadAttention(emb_dim, n_heads, initializer=initializer)
         self.mlp = tf.keras.Sequential([
-            layers.Dense(mlp_dim, activation='gelu', kernel_initializer=initializer), 
-            layers.Dense(embed_dim, kernel_initializer=initializer),
+            layers.Dense(mlp_dim, activation=activation, kernel_initializer=initializer), 
+            layers.Dense(emb_dim, kernel_initializer=initializer),
             layers.Dropout(rate)
         ])
-        self.ln1 = layers.LayerNormalization(epsilon=1e-6)
-        self.ln2 = layers.LayerNormalization(epsilon=1e-6)
+        self.ln1 = layers.LayerNormalization(epsilon=eps)
+        self.ln2 = layers.LayerNormalization(epsilon=eps)
 
     def call(self, inputs, mask):
         x = self.ln1(inputs)
@@ -99,25 +99,28 @@ class TokenEmbedding(layers.Layer):
     
 
 class GPT(tf.keras.models.Model):
-    def __init__(self, vocab_size=50000, maxlen=128, 
-                 emb_dim=256, heads=4, mlp_dim=256, depth=4, 
-                 rate=0.1, initializer='glorot_uniform'):
+    def __init__(self, vocab_size=50000, maxlen=512, 
+                 emb_dim=256, heads=8, mlp_dim=256, depth=10, 
+                 rate=0.1, initializer='glorot_uniform', 
+                 embedding_initializer='glorot_uniform', eps=1e-6,
+                 mlp_activation='gelu'):
         super(GPT, self).__init__()
         self.depth = depth
         self.tok_emb = TokenEmbedding(maxlen, vocab_size, 
-                        emb_dim, rate=rate, initializer=initializer)
+                        emb_dim, rate=rate, initializer=embedding_initializer)
         self.drop = layers.Dropout(rate)
             
-        self.transformer = [TransformerBlock(emb_dim, heads, 
-                                mlp_dim, rate=rate, initializer=initializer)
+        self.transformer = [TransformerBlock(emb_dim, 
+                                heads, mlp_dim, rate=rate,
+                                initializer=initializer, eps=eps, 
+                                activation=mlp_activation)
                             for _ in range(depth)]
 
-        self.layernorm = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm = layers.LayerNormalization(epsilon=eps)
         self.out = layers.Dense(vocab_size, kernel_initializer=initializer)
         
     def get_padding_mask(self, seq):
         seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
-
         # add extra dimensions to add the padding
         # to the attention logits.
         return seq[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, 1, seq_len)
