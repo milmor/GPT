@@ -59,8 +59,7 @@ def train(args):
 	print('#########\n')
 	model_dir = args.model_dir
 	build_vocab = args.build_vocab
-	epochs = args.epochs
-	ckpt_interval = args.ckpt_interval
+	steps = args.steps
 	max_ckpt_to_keep = args.max_ckpt_to_keep
 	context = args.context
 	k = args.k
@@ -91,12 +90,16 @@ def train(args):
 	)
 
 	train_ds = raw_train_ds.map(lambda x: preprocess(x, tokenizer), 
-			                    num_parallel_calls=tf.data.AUTOTUNE).prefetch(AUTOTUNE
+		                        num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
+		                            tf.data.AUTOTUNE
 	)
+	train_ds = iter(train_ds)
 
 	val_ds = raw_val_ds.map(lambda x: preprocess(x, tokenizer), 
-			                num_parallel_calls=tf.data.AUTOTUNE).prefetch(AUTOTUNE
+		                    num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
+		                        tf.data.AUTOTUNE
 	)
+	val_ds = iter(val_ds)
 
 	# Model
 	if config['decay_lr']:
@@ -109,11 +112,13 @@ def train(args):
 						beta_1=config['beta_1'], 
 						beta_2=config['beta_2'])
 
-	model = GPT(optimizer, vocab_size=config['vocab_size'], 
+	model = GPT(vocab_size=config['vocab_size'], 
 		        maxlen=config['seq_len'], emb_dim=config['emb_dim'],
 		        heads=config['heads'], mlp_dim=config['mlp_dim'],
 		        depth=config['depth'], rate=config['rate'], 
 		        initializer=config['initializer'])
+
+	model.compile(optimizer)
 		        
 	# Checkpoint
 	log_dir = os.path.join(model_dir, 'log-dir')
@@ -122,60 +127,63 @@ def train(args):
 	checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
 	ckpt = tf.train.Checkpoint(optimizer=optimizer,
 		                       model=model,
-		                       epoch=tf.Variable(0))
+		                       step=tf.Variable(0))
 
 	ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
 		                                      max_to_keep=max_ckpt_to_keep)
 
 	if ckpt_manager.latest_checkpoint:    
 		ckpt.restore(ckpt_manager.latest_checkpoint)
-		print('Checkpoint restored from {} at epoch {}'.format(ckpt_manager.latest_checkpoint,
-		                                                       int(ckpt.epoch)))
-		                                                       
+		print('Checkpoint restored from {} at step {}'.format(ckpt_manager.latest_checkpoint,
+		                                                       int(ckpt.step)))
+				                                                   
 	# Train
-	start = int(ckpt.epoch) + 1
-	for epoch in range(start, epochs):
-		# Train step
-		start = time.time()
-		for inp, tar in train_ds:
-		    model.train_step(inp, tar)
+	start_step = ckpt.step.numpy() + 1
+	start = time.time()
+
+	for step in range(start_step, steps):
+		# Train loop
+		inp, tar = train_ds.get_next()
+		model.train_step(inp, tar)
 		
-		print(f'\nTime taken for train epoch {epoch} is: {time.time() - start:.2f} secs')
-		print(f'Train loss: {model.train_loss_avg.result():.4f}')
-		
-		# Test step
-		for inp, tar in val_ds:
-		    model.test_step(inp, tar)
+		# Eval step
+		if step % config['ckpt_interval'] == 0 and step >= config['ckpt_interval']:
+		    print(f'\nTime taken for step {step} is: {time.time() - start:.2f} secs')
+		    print(f'Train loss: {model.train_loss_avg.result():.4f}')
 		    
-		print(f'Time taken for test epoch {epoch} is: {time.time() - start:.2f} secs')
-		print(f'Val loss: {model.test_loss_avg.result():.4f}')
+		    # Val loop
+		    start = time.time()
+		    for _ in range(config['val_steps']):
+		        inp, tar = val_ds.get_next()
+		        model.test_step(inp, tar)
+		        
+		    print(f'Time taken for validation is: {time.time() - start:.2f} secs')
+		    print(f'Val loss: {model.test_loss_avg.result():.4f}')
 		    
-		generated_text = sample(model, context, config['seq_len'],
-							config['vocab_file'], k=k)
-		print(f'Generated text:\n{generated_text}')
-		
-		# Tensorboard
-		with writer.as_default():
-		    tf.summary.scalar('train_loss', model.train_loss_avg.result(), step=epoch)
-		    tf.summary.scalar('test_loss', model.test_loss_avg.result(), step=epoch)
+		    generated_text = sample(model, 'The world is', 
+		    					config['seq_len'], config['vocab_file'], k=k)
+		    print(f'Generated text:\n{generated_text}')
 		    
-		model.train_loss_avg.reset_states()
-		model.test_loss_avg.reset_states()
-		
-		# Checkpoint
-		if epoch % ckpt_interval == 0:
-		    ckpt_manager.save(epoch)
-		    print(f'Checkpoint saved at epoch {epoch}\n') 
-		    
-		ckpt.epoch.assign_add(1)
+		    # Tensorboard
+		    with writer.as_default():
+		        tf.summary.scalar('train_loss', model.train_loss_avg.result(), step=step)
+		        tf.summary.scalar('val_loss', model.test_loss_avg.result(), step=step)
+
+		    model.train_loss_avg.reset_states()
+		    model.test_loss_avg.reset_states()
+
+		    # Checkpoint
+		    ckpt.step.assign_add(config['ckpt_interval'])
+		    ckpt_manager.save(step)
+		    print(f'Checkpoint saved at step {step}\n') 
+		    start = time.time()  
 		
 		
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_dir', default='wiki_en_model')
     parser.add_argument('--build_vocab', default=False)
-    parser.add_argument('--epochs', default=100000)
-    parser.add_argument('--ckpt_interval', type=int, default=5)
+    parser.add_argument('--steps', type=int, default=1000000)   
     parser.add_argument('--max_ckpt_to_keep', type=int, default=3)  
     parser.add_argument('--context', default='The world is')  
     parser.add_argument('--k', type=int, default=5)  

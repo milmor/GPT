@@ -20,17 +20,7 @@ def generate(args):
 	context = args.context
 	k = args.k
 	
-	if config['decay_lr']:
-		lr = tf.keras.optimizers.schedules.CosineDecay(config['learning_rate'], 
-			                                           config['decay_steps'])
-	else:
-		lr = config['learning_rate']
-		
-	optimizer = tf.keras.optimizers.Adam(lr, 
-			                             beta_1=config['beta_1'], 
-			                             beta_2=config['beta_2'])
-
-	model = GPT(optimizer, vocab_size=config['vocab_size'], 
+	model = GPT(vocab_size=config['vocab_size'], 
 			    maxlen=config['seq_len'], emb_dim=config['emb_dim'],
 			    heads=config['heads'], mlp_dim=config['mlp_dim'],
 			    depth=config['depth'], rate=config['rate'], 
@@ -43,20 +33,20 @@ def generate(args):
 	)
     
 	checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
-	ckpt = tf.train.Checkpoint(optimizer=optimizer,
-		                       model=model,
-		                       epoch=tf.Variable(0))
+	ckpt = tf.train.Checkpoint(model=model,
+		                       step=tf.Variable(0))
 
 	ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
 		                                      max_to_keep=1)
 
 	if ckpt_manager.latest_checkpoint:    
-		ckpt.restore(ckpt_manager.latest_checkpoint)
-		print('Checkpoint restored from {} at epoch {}'.format(ckpt_manager.latest_checkpoint,
-		                                                       int(ckpt.epoch)))
+		ckpt.restore(ckpt_manager.latest_checkpoint).expect_partial()
+		print('Checkpoint restored from {} at step {}'.format(ckpt_manager.latest_checkpoint,
+		                                                       int(ckpt.step)))
 
 	generated_text = sample(model, context, config['seq_len'],
 							config['vocab_file'], k=k)
+	print(f'Generated text:\n{generated_text}')
 
 	with open('generate.txt', 'w') as f:
 		f.write(generated_text)

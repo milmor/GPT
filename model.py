@@ -99,14 +99,13 @@ class TokenEmbedding(layers.Layer):
         
         
 class GPT(tf.keras.models.Model):
-    def __init__(self, optimizer, vocab_size=50000, maxlen=512, 
+    def __init__(self, vocab_size=50000, maxlen=512, 
                  emb_dim=256, heads=8, mlp_dim=256, depth=10, 
                  rate=0.1, initializer='glorot_uniform', 
                  embedding_initializer='glorot_uniform', eps=1e-6,
                  mlp_activation='gelu'):
         super(GPT, self).__init__()
         self.depth = depth
-        self.optimizer = optimizer
         self.tok_emb = TokenEmbedding(maxlen, vocab_size, 
                         emb_dim, rate=rate, initializer=embedding_initializer)
         self.drop = layers.Dropout(rate)
@@ -120,7 +119,10 @@ class GPT(tf.keras.models.Model):
         self.layernorm = layers.LayerNormalization(epsilon=eps)
         self.out = layers.Dense(vocab_size, kernel_initializer=initializer)
         
-        # Metrics
+            
+    def compile(self, optimizer):
+        super(GPT, self).compile()
+        self.optimizer = optimizer
         self.loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         self.train_loss_avg = tf.keras.metrics.Mean(name='train_loss')
         self.test_loss_avg = tf.keras.metrics.Mean(name='val_loss')
