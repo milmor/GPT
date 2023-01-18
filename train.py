@@ -23,7 +23,7 @@ def create_ds(dataset, batch_size, min_seq_len, buffer_size=None):
     )
     dataset = (
         dataset.map(lambda x: tf_text.normalize_utf8(x['text'], 'NFKD'), 
-                    num_parallel_calls=tf.data.AUTOTUNE)
+                    num_parallel_calls=AUTOTUNE)
         .batch(batch_size)
     )    
     if buffer_size:
@@ -106,9 +106,9 @@ def train(args):
 		lr = config['learning_rate']
 
 	optimizer = tf.keras.optimizers.Adam(lr, 
-			                             beta_1=config['beta_1'], 
-			                             beta_2=config['beta_2'])
-			                             
+						beta_1=config['beta_1'], 
+						beta_2=config['beta_2'])
+
 	model = GPT(optimizer, vocab_size=config['vocab_size'], 
 		        maxlen=config['seq_len'], emb_dim=config['emb_dim'],
 		        heads=config['heads'], mlp_dim=config['mlp_dim'],
