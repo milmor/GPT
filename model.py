@@ -24,7 +24,7 @@ class MultiHeadAttention(layers.Layer):
         self.dropout1 = layers.Dropout(rate)
         self.dropout2 = layers.Dropout(rate)
         
-        self.out_proj = layers.Dense(model_dim, kernel_initializer=initializer)
+        self.wo = layers.Dense(model_dim, kernel_initializer=initializer)
 
     def split_heads(self, x, batch_size):
         x = tf.reshape(x, (batch_size, -1, self.n_heads, self.head_dim))
@@ -54,7 +54,7 @@ class MultiHeadAttention(layers.Layer):
         attn = tf.transpose(attn, perm=[0, 2, 1, 3]) 
         original_size_attention = tf.reshape(attn, (batch_size, -1, self.model_dim)) 
 
-        output = self.dropout2(self.out_proj(original_size_attention))
+        output = self.dropout2(self.wo(original_size_attention))
         return output
     
     
@@ -96,16 +96,17 @@ class TokenEmbedding(layers.Layer):
         positions = tf.range(start=0, limit=self.max_len, delta=1)
         positions = self.position_emb(positions)
         return self.dropout(token_embeddings + positions) 
-    
-
+        
+        
 class GPT(tf.keras.models.Model):
-    def __init__(self, vocab_size=50000, maxlen=512, 
+    def __init__(self, optimizer, vocab_size=50000, maxlen=512, 
                  emb_dim=256, heads=8, mlp_dim=256, depth=10, 
                  rate=0.1, initializer='glorot_uniform', 
                  embedding_initializer='glorot_uniform', eps=1e-6,
                  mlp_activation='gelu'):
         super(GPT, self).__init__()
         self.depth = depth
+        self.optimizer = optimizer
         self.tok_emb = TokenEmbedding(maxlen, vocab_size, 
                         emb_dim, rate=rate, initializer=embedding_initializer)
         self.drop = layers.Dropout(rate)
@@ -118,6 +119,11 @@ class GPT(tf.keras.models.Model):
 
         self.layernorm = layers.LayerNormalization(epsilon=eps)
         self.out = layers.Dense(vocab_size, kernel_initializer=initializer)
+        
+        # Metrics
+        self.loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        self.train_loss_avg = tf.keras.metrics.Mean(name='train_loss')
+        self.test_loss_avg = tf.keras.metrics.Mean(name='val_loss')
         
     def get_padding_mask(self, seq):
         seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
@@ -147,3 +153,20 @@ class GPT(tf.keras.models.Model):
         x = self.layernorm(x)
         x = self.out(x)
         return x
+    
+    @tf.function
+    def train_step(self, inp, tar):
+        with tf.GradientTape() as tape:
+            predictions = self(inp, training=True)
+            loss = self.loss_function(tar, predictions)
+        gradients = tape.gradient(loss, self.trainable_variables)
+
+        self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+        self.train_loss_avg(loss)
+        
+    @tf.function
+    def test_step(self, inp, tar):
+        predictions = self(inp, training=False)
+        loss = self.loss_function(tar, predictions)
+
+        self.test_loss_avg(loss)

@@ -7,148 +7,178 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
 import time
 import tensorflow as tf
-import tensorflow_text as text
+import tensorflow_text as tf_text
+import keras_nlp
+import tensorflow_datasets as tfds
 from model import GPT
 from utils import *
-from hparams import hparams
+from config import config
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
-def load_file(filename):
-    raw_text = tf.io.read_file(filename)
-    return raw_text
-
-
-def preprocess(raw_text, maxlen, vocab_file):
-    tokenizer = text.BertTokenizer(vocab_file)
-    tokenized_text = tokenizer.tokenize(raw_text).merge_dims(1, -1) 
-    trimmer = text.RoundRobinTrimmer(max_seq_length=maxlen + 1)
-    trimmed_feat = trimmer.trim([tokenized_text])
-    input_word_ids, _ = text.pad_model_inputs(input=trimmed_feat[0], max_seq_length=maxlen + 1)
-    x = input_word_ids[:, :-1]
-    y = input_word_ids[:, 1:]
-    return x, y
-
-
-def create_ds(file_pattern, batch_size, maxlen, vocab_file):
-    text_paths = tf.data.Dataset.list_files(file_pattern)
-    BUFFER_SIZE = tf.data.experimental.cardinality(text_paths)
-    print(f'Train dataset size: {BUFFER_SIZE}')
-    text_paths = text_paths.cache().shuffle(BUFFER_SIZE)
-
-    dataset = text_paths.map(load_file, 
-                  num_parallel_calls=AUTOTUNE).batch(batch_size, num_parallel_calls=AUTOTUNE)
-    dataset = dataset.map(lambda filename: preprocess(filename, maxlen, vocab_file), 
-                          num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
+def create_ds(dataset, batch_size, min_seq_len, buffer_size=None):
+    dataset = (
+        dataset.filter(lambda x: tf.strings.length(x['text']) > min_seq_len)
+    )
+    dataset = (
+        dataset.map(lambda x: tf_text.normalize_utf8(x['text'], 'NFKD'), 
+                    num_parallel_calls=tf.data.AUTOTUNE)
+        .batch(batch_size)
+    )    
+    if buffer_size:
+        dataset = dataset.shuffle(buffer_size=buffer_size)
+        
     return dataset
+    
+    
+def preprocess(inputs, tokenizer):
+    tokenized_text = tokenizer(inputs)
+    x = tokenized_text[:, :-1]
+    y = tokenized_text[:, 1:]
+    return x, y
+    
+    
+def build_vocabulary(dataset, vocab_size, vocab_file):
+    start = time.time()
+    vocab = keras_nlp.tokenizers.compute_word_piece_vocabulary(
+        dataset,
+        vocabulary_size=vocab_size,
+        lowercase=False,
+        reserved_tokens=["[PAD]", "[UNK]", "[BOS]"],
+    )
+
+    print(f'Time for generate vocab is {time.time()-start:.4f} sec')
+    write_vocab_file(vocab_file, vocab)
+    print(f'{vocab_file} saved')
 
 
 def train(args):
-    print('\n#########')
-    print('GPT Train')
-    print('#########\n')
-    file_pattern = args.file_pattern
-    model_dir = args.model_dir
-    vocab_file = args.vocab_file
-    build_vocab = args.build_vocab
-    epochs = args.epochs
-    ckpt_interval = args.ckpt_interval
-    max_ckpt_to_keep = args.max_ckpt_to_keep
-    context = args.context
+	print('\n#########')
+	print('GPT Train')
+	print('#########\n')
+	model_dir = args.model_dir
+	build_vocab = args.build_vocab
+	epochs = args.epochs
+	ckpt_interval = args.ckpt_interval
+	max_ckpt_to_keep = args.max_ckpt_to_keep
+	context = args.context
+	k = args.k
+	print(config)
+    
+    # Dataset
+	read_config = tfds.ReadConfig(
+		shuffle_seed=config['shuffle_seed'],
+	)
 
-    model = GPT(vocab_size=hparams['vocab_size'], 
-                maxlen=hparams['maxlen'], emb_dim=hparams['emb_dim'],
-                heads=hparams['heads'], mlp_dim=hparams['mlp_dim'],
-                depth=hparams['depth'], rate=hparams['rate'], 
-                initializer=hparams['initializer'])
+	raw_train_ds, raw_val_ds = tfds.load('wikipedia/20190301.en', 
+								split=['train[:90%]', 'train[90%:]'],
+								shuffle_files=True, read_config=read_config)
+	print(f'\nTrain size: {len(raw_train_ds)} Val size: {len(raw_val_ds)}')
+	
+	raw_train_ds = create_ds(raw_train_ds, config['batch_size'], 
+					config['min_seq_len'], config['buffer_size'])
+	raw_val_ds = create_ds(raw_val_ds, config['batch_size'], 
+					config['min_seq_len'])
 
-    if hparams['decay_lr']:
-        lr = tf.keras.optimizers.schedules.CosineDecay(hparams['learning_rate'], 
-                                                       hparams['decay_steps'])
-    else:
-        lr = hparams['learning_rate']
+	if build_vocab:
+		build_vocabulary(raw_train_ds, vocab_size, vocab_file)
+		
+	tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+		vocabulary=config['vocab_file'],
+		sequence_length=config['seq_len'] + 1,
+		lowercase=False,
+	)
 
-    optimizer = tf.keras.optimizers.Adam(lr, 
-                                         beta_1=hparams['beta_1'], 
-                                         beta_2=hparams['beta_2'])
+	train_ds = raw_train_ds.map(lambda x: preprocess(x, tokenizer), 
+			                    num_parallel_calls=tf.data.AUTOTUNE).prefetch(AUTOTUNE
+	)
 
-    loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+	val_ds = raw_val_ds.map(lambda x: preprocess(x, tokenizer), 
+			                num_parallel_calls=tf.data.AUTOTUNE).prefetch(AUTOTUNE
+	)
 
-    if build_vocab:
-        build_vocabulary(file_pattern, hparams['vocab_size'], vocab_file)
-        print(f'Build {vocab_file}')
-    else:
-        tokenizer = text.BertTokenizer(vocab_file)
-        print(f'{vocab_file} loaded')
+	# Model
+	if config['decay_lr']:
+		lr = tf.keras.optimizers.schedules.CosineDecay(config['learning_rate'], 
+			                                           config['decay_steps'])
+	else:
+		lr = config['learning_rate']
 
-    dataset = create_ds(file_pattern, hparams['batch_size'], hparams['maxlen'], vocab_file)
-    tokenizer = text.BertTokenizer(vocab_file)
+	optimizer = tf.keras.optimizers.Adam(lr, 
+			                             beta_1=config['beta_1'], 
+			                             beta_2=config['beta_2'])
+			                             
+	model = GPT(optimizer, vocab_size=config['vocab_size'], 
+		        maxlen=config['seq_len'], emb_dim=config['emb_dim'],
+		        heads=config['heads'], mlp_dim=config['mlp_dim'],
+		        depth=config['depth'], rate=config['rate'], 
+		        initializer=config['initializer'])
+		        
+	# Checkpoint
+	log_dir = os.path.join(model_dir, 'log-dir')
+	writer = tf.summary.create_file_writer(log_dir)
 
-    log_dir = os.path.join(model_dir, 'log-dir')
-    writer = tf.summary.create_file_writer(log_dir)
+	checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
+	ckpt = tf.train.Checkpoint(optimizer=optimizer,
+		                       model=model,
+		                       epoch=tf.Variable(0))
 
-    checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
-    ckpt = tf.train.Checkpoint(optimizer=optimizer,
-                               model=model,
-                               epoch=tf.Variable(0))
+	ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
+		                                      max_to_keep=max_ckpt_to_keep)
 
-    ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
-                                              max_to_keep=max_ckpt_to_keep)
-
-    if ckpt_manager.latest_checkpoint:    
-        ckpt.restore(ckpt_manager.latest_checkpoint)
-        print(f'Checkpoint restored from {ckpt_manager.latest_checkpoint} at epoch {int(ckpt.epoch)}')
-        ckpt.epoch.assign_add(1)
-    start_epoch = int(ckpt.epoch)
-
-    train_loss_avg = tf.keras.metrics.Mean(name='train_loss')
-
-    @tf.function
-    def train_step(inp, tar):
-        with tf.GradientTape() as tape:
-            predictions = model(inp, training=True)
-            loss = loss_function(tar, predictions)
-        gradients = tape.gradient(loss, model.trainable_variables)
-        
-        if hparams['clip_global_norm']:
-            gradients, _ = tf.clip_by_global_norm(gradients, hparams['clip_norm'])
-        
-        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-        train_loss_avg(loss)
-
-    for epoch in range(start_epoch, epochs):
-        start = time.time()
-        for inp, tar in dataset:
-            train_step(inp, tar)
-        
-        print(f'\nTime taken for epoch {epoch} is {time.time() - start:.2f} secs')
-        print(f'Loss: {train_loss_avg.result():.4f}')
-        sample_text = sample(model, context, hparams['maxlen'], tokenizer)
-        print(f'Sample text: \n{sample_text}')
-        
-        with writer.as_default():
-            tf.summary.scalar('train_loss', train_loss_avg.result(), step=epoch)
-            
-        train_loss_avg.reset_states()
-        
-        if epoch % ckpt_interval == 0:
-            ckpt_manager.save(epoch)
-            print(f'Checkpoint saved at epoch {epoch}\n') 
-
-        ckpt.epoch.assign_add(1)
-
+	if ckpt_manager.latest_checkpoint:    
+		ckpt.restore(ckpt_manager.latest_checkpoint)
+		print('Checkpoint restored from {} at epoch {}'.format(ckpt_manager.latest_checkpoint,
+		                                                       int(ckpt.epoch)))
+		                                                       
+	# Train
+	start = int(ckpt.epoch) + 1
+	for epoch in range(start, epochs):
+		# Train step
+		start = time.time()
+		for inp, tar in train_ds:
+		    model.train_step(inp, tar)
+		
+		print(f'\nTime taken for train epoch {epoch} is: {time.time() - start:.2f} secs')
+		print(f'Train loss: {model.train_loss_avg.result():.4f}')
+		
+		# Test step
+		for inp, tar in val_ds:
+		    model.test_step(inp, tar)
+		    
+		print(f'Time taken for test epoch {epoch} is: {time.time() - start:.2f} secs')
+		print(f'Val loss: {model.test_loss_avg.result():.4f}')
+		    
+		generated_text = sample(model, context, config['seq_len'],
+							config['vocab_file'], k=k)
+		print(f'Generated text:\n{generated_text}')
+		
+		# Tensorboard
+		with writer.as_default():
+		    tf.summary.scalar('train_loss', model.train_loss_avg.result(), step=epoch)
+		    tf.summary.scalar('test_loss', model.test_loss_avg.result(), step=epoch)
+		    
+		model.train_loss_avg.reset_states()
+		model.test_loss_avg.reset_states()
+		
+		# Checkpoint
+		if epoch % ckpt_interval == 0:
+		    ckpt_manager.save(epoch)
+		    print(f'Checkpoint saved at epoch {epoch}\n') 
+		    
+		ckpt.epoch.assign_add(1)
+																																												
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file_pattern')
-    parser.add_argument('--model_dir', default='model-1')
-    parser.add_argument('--vocab_file', default='vocab.txt')
+    parser.add_argument('--model_dir', default='wiki_en_model')
     parser.add_argument('--build_vocab', default=False)
-    parser.add_argument('--epochs', type=int, default=10000)  
+    parser.add_argument('--epochs', default=100000)
     parser.add_argument('--ckpt_interval', type=int, default=5)
     parser.add_argument('--max_ckpt_to_keep', type=int, default=3)  
-    parser.add_argument('--context', default='Enter context here...')  
+    parser.add_argument('--context', default='The world is')  
+    parser.add_argument('--k', type=int, default=5)  
     args = parser.parse_args()
 
     train(args)

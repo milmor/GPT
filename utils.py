@@ -6,60 +6,39 @@ Author: Emilio Morales (mil.mor.mor@gmail.com)
 import glob
 import time
 import tensorflow as tf
-import tensorflow_text as text
-from tensorflow_text.tools.wordpiece_vocab import bert_vocab_from_dataset as bert_vocab
-
-AUTOTUNE = tf.data.experimental.AUTOTUNE
+import keras_nlp
 
 
-def sample(model, context, maxlen, tokenizer, k=10):  
-    tokenized_text = tokenizer.tokenize(context).merge_dims(1, -1) 
-    context_len = tokenized_text[0].shape[0]
-    trimmer = text.RoundRobinTrimmer(max_seq_length=maxlen + 1)
-    trimmed_feat = trimmer.trim([tokenized_text])
-    x = trimmed_feat[0]
+def sample(model, context, seq_len, vocab_file, k=10):  
+    # No padding tokenizer
+    sample_tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+        vocabulary=vocab_file,
+        sequence_length=None,
+        lowercase=False
+    )
     
-    for i in range(context_len - 1, maxlen):
-        x_pad, _ = text.pad_model_inputs(input=x, max_seq_length=maxlen)
-       
+    x = sample_tokenizer(context)
+    x = x[tf.newaxis, :]
+    context_len = x.shape[1]
+
+    for i in range(context_len, seq_len):
+        x_pad = tf.keras.preprocessing.sequence.pad_sequences(x, maxlen=seq_len, padding="post")
+
         logits = model(x_pad, training=False)
-   
-        logits, indices = tf.math.top_k(logits[:, i, :], k=k)
+
+        logits, indices = tf.math.top_k(logits[:, i -1, :], k=k)
         logits = tf.keras.activations.softmax(logits)
         rand_idx = tf.random.categorical(logits, num_samples=1, dtype=tf.int64)
      
-        sample = tf.cast(indices[0][rand_idx[0][0]], tf.int64)[tf.newaxis, tf.newaxis]
-
+        sample = tf.cast(indices[0][rand_idx[0][0]], tf.int32)[tf.newaxis, tf.newaxis]
         x = tf.concat([x, sample], axis=-1)
 
-    str_list = tokenizer.detokenize(x).numpy()[0] 
-    out_text = ' '.join([token.decode('utf-8') for token in str_list])
-   
+    try: 
+        out_text = sample_tokenizer.detokenize(x).numpy()[0].decode('utf-8') 
+    except:
+        print("utf-8' codec can't decode byte")
     return out_text
 
-def build_vocabulary(file_pattern, vocab_size, vocab_file='vocab.txt', batch_size=128):
-    filenames = glob.glob(file_pattern)
-    text_ds = tf.data.TextLineDataset(filenames)
-    
-    bert_tokenizer_params=dict(lower_case=False)
-    reserved_tokens=['[PAD]', '[UNK]']
-
-    bert_vocab_args = dict(
-        vocab_size = vocab_size,
-        reserved_tokens=reserved_tokens,
-        bert_tokenizer_params=bert_tokenizer_params
-    )
-    
-    print(f'Building vocabulary from {len(filenames)} files...')
-    start = time.time()
-    vocab = bert_vocab.bert_vocab_from_dataset(
-    text_ds.batch(batch_size, num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE),
-    **bert_vocab_args
-    )
-    
-    write_vocab_file(vocab_file, vocab)
-    print(f'{vocab_file} saved')
-    print(f'Time for generate vocab is {time.time()-start} sec')
 
 def write_vocab_file(vocab_file, vocab):
     with open(vocab_file, 'w') as f:

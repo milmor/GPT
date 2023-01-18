@@ -3,16 +3,19 @@ Implementation of [GPT (Generative Pre-trained Transformer)](https://proceedings
 
 
 ## Dependencies
-- Python 3.7
+- Python 3.8
 - Tensorfow 2.8
 - TensorFlow Text 2.8.1
 
 
 ## Usage
+The model trains by default on the English Wikipedia dataset (~19.50 GB). This repo provides a vocabulary on the `wiki_en_vocab` file.
 ### Train
-Use `--file_pattern=<file_pattern>` to provide the dataset path and file pattern. Use `--context=<context>` to provide context.
+
+
+Use `--model_dir=<model_dir>` to provide the model directory name.
 ```
-python train.py --file_pattern=./dataset_path/*.txt --context=<context>
+python generate.py --model_dir=<model_dir> 
 ```
 
 Some other options:
@@ -25,7 +28,7 @@ python generate.py --model_dir=<model_dir> --context=<context>
 ```
 
 ### Hparams setting
-Adjust hyperparameters on the `hparams.py` file.
+Adjust hyperparameters on the `config.py` file.
 
 ### Tensorboard
 Run `tensorboard --logdir ./`.
@@ -40,10 +43,6 @@ Run `tensorboard --logdir ./`.
 
 Implementation notes:
 - WordPiece tokenization
-- Cosine learning rate decay
-- Clip gradients by global norm
-- Gaussian Error Linear Unit (GELU) activation
-- Adam with β1 = 0.9 and β2 = 0.95 
 
 
 ## Licence
