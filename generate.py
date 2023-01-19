@@ -13,43 +13,43 @@ from utils import *
 
 
 def generate(args):
-	print('\n############')
-	print('GPT Generate')
-	print('############\n')
-	model_dir = args.model_dir
-	context = args.context
-	k = args.k
-	
-	model = GPT(vocab_size=config['vocab_size'], 
-			    maxlen=config['seq_len'], emb_dim=config['emb_dim'],
-			    heads=config['heads'], mlp_dim=config['mlp_dim'],
-			    depth=config['depth'], rate=config['rate'], 
-			    initializer=config['initializer'])
+    print('\n############')
+    print('GPT Generate')
+    print('############\n')
+    model_dir = args.model_dir
+    context = args.context
+    k = args.k
 
-	tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-		vocabulary=config['vocab_file'],
-		sequence_length=config['seq_len'] + 1,
-		lowercase=False,
-	)
-    
-	checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
-	ckpt = tf.train.Checkpoint(model=model,
-		                       step=tf.Variable(0))
+    model = GPT(vocab_size=config['vocab_size'], 
+                maxlen=config['seq_len'], emb_dim=config['emb_dim'],
+                heads=config['heads'], mlp_dim=config['mlp_dim'],
+                depth=config['depth'], rate=config['rate'], 
+                initializer=config['initializer'])
 
-	ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
-		                                      max_to_keep=1)
+    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+        vocabulary=config['vocab_file'],
+        sequence_length=config['seq_len'] + 1,
+        lowercase=False,
+    )
 
-	if ckpt_manager.latest_checkpoint:    
-		ckpt.restore(ckpt_manager.latest_checkpoint).expect_partial()
-		print('Checkpoint restored from {} at step {}'.format(ckpt_manager.latest_checkpoint,
-		                                                       int(ckpt.step)))
+    checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
+    ckpt = tf.train.Checkpoint(model=model,
+                               step=tf.Variable(0))
 
-	generated_text = sample(model, context, config['seq_len'],
-							config['vocab_file'], k=k)
-	print(f'Generated text:\n{generated_text}')
+    ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
+                                              max_to_keep=1)
 
-	with open('generate.txt', 'w') as f:
-		f.write(generated_text)
+    if ckpt_manager.latest_checkpoint:    
+        ckpt.restore(ckpt_manager.latest_checkpoint).expect_partial()
+        print('Checkpoint restored from {} at step {}'.format(ckpt_manager.latest_checkpoint,
+                                                               int(ckpt.step)))
+
+    generated_text = sample(model, context, config['seq_len'],
+                            config['vocab_file'], k=k)
+    print(f'Generated text:\n{generated_text}')
+
+    with open('generate.txt', 'w') as f:
+        f.write(generated_text)
 
 
 def main():

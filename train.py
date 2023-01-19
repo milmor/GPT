@@ -54,134 +54,134 @@ def build_vocabulary(dataset, vocab_size, vocab_file):
 
 
 def train(args):
-	print('\n#########')
-	print('GPT Train')
-	print('#########\n')
-	model_dir = args.model_dir
-	build_vocab = args.build_vocab
-	steps = args.steps
-	max_ckpt_to_keep = args.max_ckpt_to_keep
-	context = args.context
-	k = args.k
-	print(config)
-    
+    print('\n#########')
+    print('GPT Train')
+    print('#########\n')
+    model_dir = args.model_dir
+    build_vocab = args.build_vocab
+    steps = args.steps
+    max_ckpt_to_keep = args.max_ckpt_to_keep
+    context = args.context
+    k = args.k
+    print(config)
+
     # Dataset
-	read_config = tfds.ReadConfig(
-		shuffle_seed=config['shuffle_seed'],
-	)
+    read_config = tfds.ReadConfig(
+        shuffle_seed=config['shuffle_seed'],
+    )
 
-	raw_train_ds, raw_val_ds = tfds.load('wikipedia/20190301.en', 
-								split=['train[:90%]', 'train[90%:]'],
-								shuffle_files=True, read_config=read_config)
-	print(f'\nTrain size: {len(raw_train_ds)} Val size: {len(raw_val_ds)}')
-	
-	raw_train_ds = create_ds(raw_train_ds, config['batch_size'], 
-					config['min_seq_len'], config['buffer_size'])
-	raw_val_ds = create_ds(raw_val_ds, config['batch_size'], 
-					config['min_seq_len'])
+    raw_train_ds, raw_val_ds = tfds.load('wikipedia/20190301.en', 
+                                split=['train[:90%]', 'train[90%:]'],
+                                shuffle_files=True, read_config=read_config)
+    print(f'\nTrain size: {len(raw_train_ds)} Val size: {len(raw_val_ds)}')
 
-	if build_vocab:
-		build_vocabulary(raw_train_ds, vocab_size, vocab_file)
-		
-	tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-		vocabulary=config['vocab_file'],
-		sequence_length=config['seq_len'] + 1,
-		lowercase=False,
-	)
+    raw_train_ds = create_ds(raw_train_ds, config['batch_size'], 
+                    config['min_seq_len'], config['buffer_size'])
+    raw_val_ds = create_ds(raw_val_ds, config['batch_size'], 
+                    config['min_seq_len'])
 
-	train_ds = raw_train_ds.map(lambda x: preprocess(x, tokenizer), 
-		                        num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
-		                            tf.data.AUTOTUNE
-	)
-	train_ds = iter(train_ds)
+    if build_vocab:
+        build_vocabulary(raw_train_ds, vocab_size, vocab_file)
 
-	val_ds = raw_val_ds.map(lambda x: preprocess(x, tokenizer), 
-		                    num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
-		                        tf.data.AUTOTUNE
-	)
-	val_ds = iter(val_ds)
+    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
+        vocabulary=config['vocab_file'],
+        sequence_length=config['seq_len'] + 1,
+        lowercase=False,
+    )
 
-	# Model
-	if config['decay_lr']:
-		lr = tf.keras.optimizers.schedules.CosineDecay(config['learning_rate'], 
-			                                           config['decay_steps'])
-	else:
-		lr = config['learning_rate']
+    train_ds = raw_train_ds.map(lambda x: preprocess(x, tokenizer), 
+                                num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
+                                    tf.data.AUTOTUNE
+    )
+    train_ds = iter(train_ds)
 
-	optimizer = tf.keras.optimizers.Adam(lr, 
-						beta_1=config['beta_1'], 
-						beta_2=config['beta_2'])
+    val_ds = raw_val_ds.map(lambda x: preprocess(x, tokenizer), 
+                            num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
+                                tf.data.AUTOTUNE
+    )
+    val_ds = iter(val_ds)
 
-	model = GPT(vocab_size=config['vocab_size'], 
-		        maxlen=config['seq_len'], emb_dim=config['emb_dim'],
-		        heads=config['heads'], mlp_dim=config['mlp_dim'],
-		        depth=config['depth'], rate=config['rate'], 
-		        initializer=config['initializer'])
+    # Model
+    if config['decay_lr']:
+        lr = tf.keras.optimizers.schedules.CosineDecay(config['learning_rate'], 
+                                                       config['decay_steps'])
+    else:
+        lr = config['learning_rate']
 
-	model.compile(optimizer)
-		        
-	# Checkpoint
-	log_dir = os.path.join(model_dir, 'log-dir')
-	writer = tf.summary.create_file_writer(log_dir)
+    optimizer = tf.keras.optimizers.Adam(lr, 
+                        beta_1=config['beta_1'], 
+                        beta_2=config['beta_2'])
 
-	checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
-	ckpt = tf.train.Checkpoint(optimizer=optimizer,
-		                       model=model,
-		                       step=tf.Variable(0),
-		                       best_loss=tf.Variable(1000.0)) # initialize with big value
+    model = GPT(vocab_size=config['vocab_size'], 
+                maxlen=config['seq_len'], emb_dim=config['emb_dim'],
+                heads=config['heads'], mlp_dim=config['mlp_dim'],
+                depth=config['depth'], rate=config['rate'], 
+                initializer=config['initializer'])
 
-	ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
-		                                      max_to_keep=max_ckpt_to_keep)
+    model.compile(optimizer)
 
-	if ckpt_manager.latest_checkpoint:    
-		ckpt.restore(ckpt_manager.latest_checkpoint)
-		print('Checkpoint restored from {} at step {}'.format(ckpt_manager.latest_checkpoint,
-		                                                       int(ckpt.step)))
-				                                                   
-	# Train
-	start_step = ckpt.step.numpy() + 1
-	start = time.time()
+    # Checkpoint
+    log_dir = os.path.join(model_dir, 'log-dir')
+    writer = tf.summary.create_file_writer(log_dir)
 
-	for step in range(start_step, steps):
-		# Train loop
-		inp, tar = train_ds.get_next()
-		model.train_step(inp, tar)
-		
-		# Eval step
-		if step % config['ckpt_interval'] == 0 and step >= config['ckpt_interval']:
-			print(f'\nTime taken for step {step} is: {time.time() - start:.2f} secs')
-			print(f'Train loss: {model.train_loss_avg.result():.4f}')
+    checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
+    ckpt = tf.train.Checkpoint(optimizer=optimizer,
+                               model=model,
+                               step=tf.Variable(0),
+                               best_loss=tf.Variable(1000.0)) # initialize with big value
 
-			# Val loop
-			start = time.time()
-			for _ in range(config['val_steps']):
-				inp, tar = val_ds.get_next()
-				model.test_step(inp, tar)
-				
-			print(f'Time taken for validation is: {time.time() - start:.2f} secs')
-			print(f'Val loss: {model.test_loss_avg.result():.4f}')
+    ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
+                                              max_to_keep=max_ckpt_to_keep)
 
-			generated_text = sample(model, 'The world is', 
-								config['seq_len'], config['vocab_file'], k=k)
-			print(f'Generated text:\n{generated_text}')
+    if ckpt_manager.latest_checkpoint:    
+        ckpt.restore(ckpt_manager.latest_checkpoint)
+        print('Checkpoint restored from {} at step {}'.format(ckpt_manager.latest_checkpoint,
+                                                               int(ckpt.step)))
 
-			# Tensorboard
-			with writer.as_default():
-				tf.summary.scalar('train_loss', model.train_loss_avg.result(), step=step)
-				tf.summary.scalar('val_loss', model.test_loss_avg.result(), step=step)
-				
-			# Checkpoint
-			if model.test_loss_avg.result() < ckpt.best_loss.numpy():
-				ckpt.step.assign_add(config['ckpt_interval'])
-				ckpt.best_loss.assign(model.test_loss_avg.result())
-				ckpt_manager.save(step)
-				print(f'Checkpoint saved at step {step}\n') 
+    # Train
+    start_step = ckpt.step.numpy() + 1
+    start = time.time()
 
-			model.train_loss_avg.reset_states()
-			model.test_loss_avg.reset_states()
-			start = time.time()  
+    for step in range(start_step, steps):
+        # Train loop
+        inp, tar = train_ds.get_next()
+        model.train_step(inp, tar)
 
-		
+        # Eval step
+        if step % config['ckpt_interval'] == 0 and step >= config['ckpt_interval']:
+            print(f'\nTime taken for step {step} is: {time.time() - start:.2f} secs')
+            print(f'Train loss: {model.train_loss_avg.result():.4f}')
+
+            # Val loop
+            start = time.time()
+            for _ in range(config['val_steps']):
+                inp, tar = val_ds.get_next()
+                model.test_step(inp, tar)
+
+            print(f'Time taken for validation is: {time.time() - start:.2f} secs')
+            print(f'Val loss: {model.test_loss_avg.result():.4f}')
+
+            generated_text = sample(model, 'The world is', 
+                                config['seq_len'], config['vocab_file'], k=k)
+            print(f'Generated text:\n{generated_text}')
+
+            # Tensorboard
+            with writer.as_default():
+                tf.summary.scalar('train_loss', model.train_loss_avg.result(), step=step)
+                tf.summary.scalar('val_loss', model.test_loss_avg.result(), step=step)
+
+            # Checkpoint
+            if model.test_loss_avg.result() < ckpt.best_loss.numpy():
+                ckpt.step.assign_add(config['ckpt_interval'])
+                ckpt.best_loss.assign(model.test_loss_avg.result())
+                ckpt_manager.save(step)
+                print(f'Checkpoint saved at step {step}\n') 
+
+            model.train_loss_avg.reset_states()
+            model.test_loss_avg.reset_states()
+            start = time.time()  
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_dir', default='wiki_en_model')
@@ -197,3 +197,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
