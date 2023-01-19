@@ -1,5 +1,5 @@
 # GPT
-Implementation of [GPT (Generative Pre-trained Transformer)](https://proceedings.neurips.cc/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf) in Tensorflow.
+This repository is a simple and clean [GPT](https://proceedings.neurips.cc/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf)  implementation in Tensorflow.
 
 
 ## Dependencies
@@ -9,11 +9,8 @@ Implementation of [GPT (Generative Pre-trained Transformer)](https://proceedings
 
 
 ## Usage
-The model trains by default on the English Wikipedia dataset (~19.50 GB). This repo provides a vocabulary on the `wiki_en_vocab` file.
 ### Train
-
-
-Use `--model_dir=<model_dir>` to provide the model directory name.
+The model trains by default on the English Wikipedia dataset (~19.50 GB). Use `--model_dir=<model_dir>` to provide the model directory name.
 ```
 python generate.py --model_dir=<model_dir> 
 ```
@@ -35,7 +32,6 @@ Run `tensorboard --logdir ./`.
 
 
 ## References
-
 - [Improving language understanding by generative pre-training](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)
 - [Language models are unsupervised multitask learners](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)
 - [Language models are few-shot learners](https://proceedings.neurips.cc/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf)
