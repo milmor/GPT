@@ -13,7 +13,7 @@ This repository is a simple and clean [GPT](https://proceedings.neurips.cc/paper
 ### Train
 The model trains by default on the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. Use `--model_dir=<model_dir>` to provide the model directory name.
 ```
-python generate.py --model_dir=<model_dir> 
+python train.py --model_dir=<model_dir> 
 ```
 
 Some other options:
