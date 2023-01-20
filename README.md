@@ -4,13 +4,14 @@ This repository is a simple and clean [GPT](https://proceedings.neurips.cc/paper
 
 ## Dependencies
 - Python 3.8
-- Tensorfow 2.8
+- TensorFow 2.8
 - TensorFlow Text 2.8.1
-
+- TensorFlow Datasets 4.8.1
+- Datasets 2.8.0
 
 ## Usage
 ### Train
-The model trains by default on the English Wikipedia dataset (~19.50 GB). Use `--model_dir=<model_dir>` to provide the model directory name.
+The model trains by default on the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. Use `--model_dir=<model_dir>` to provide the model directory name.
 ```
 python generate.py --model_dir=<model_dir> 
 ```

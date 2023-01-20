@@ -10,6 +10,7 @@ import tensorflow as tf
 import tensorflow_text as tf_text
 import keras_nlp
 import tensorflow_datasets as tfds
+import json
 from model import GPT
 from utils import *
 from config import config
@@ -17,18 +18,19 @@ from config import config
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
-def create_ds(dataset, batch_size, min_seq_len, buffer_size=None):
-    dataset = (
-        dataset.filter(lambda x: tf.strings.length(x['text']) > min_seq_len)
-    )
+def create_ds(dataset, batch_size, min_seq_len=False, buffer_size=None):
+    if min_seq_len:
+        dataset = (
+            dataset.filter(lambda x: tf.strings.length(x['text']) > min_seq_len)
+        )
     dataset = (
         dataset.map(lambda x: tf_text.normalize_utf8(x['text'], 'NFKD'), 
                     num_parallel_calls=AUTOTUNE)
-        .batch(batch_size)
     )    
     if buffer_size:
         dataset = dataset.shuffle(buffer_size=buffer_size)
-        
+
+    dataset = dataset.batch(batch_size)
     return dataset
     
     
@@ -63,16 +65,19 @@ def train(args):
     max_ckpt_to_keep = args.max_ckpt_to_keep
     context = args.context
     k = args.k
+    ds_name = args.ds_name
     print(config)
 
     # Dataset
     read_config = tfds.ReadConfig(
         shuffle_seed=config['shuffle_seed'],
     )
-
-    raw_train_ds, raw_val_ds = tfds.load('wikipedia/20190301.en', 
-                                split=['train[:90%]', 'train[90%:]'],
+    train_size = config['train_size']
+    raw_train_ds, raw_val_ds = tfds.load(ds_name, 
+                                split=[f'train[:{train_size}%]', 
+                                       f'train[{train_size}%:]'],
                                 shuffle_files=True, read_config=read_config)
+    raw_val_ds = raw_val_ds.take(config['batch_size']*config['val_steps'])
     print(f'\nTrain size: {len(raw_train_ds)} Val size: {len(raw_val_ds)}')
 
     raw_train_ds = create_ds(raw_train_ds, config['batch_size'], 
@@ -91,20 +96,20 @@ def train(args):
 
     train_ds = raw_train_ds.map(lambda x: preprocess(x, tokenizer), 
                                 num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
-                                    tf.data.AUTOTUNE
+                                    AUTOTUNE
     )
     train_ds = iter(train_ds)
 
     val_ds = raw_val_ds.map(lambda x: preprocess(x, tokenizer), 
-                            num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
-                                tf.data.AUTOTUNE
+                            num_parallel_calls=tf.data.AUTOTUNE).prefetch(
+                                AUTOTUNE
     )
-    val_ds = iter(val_ds)
 
     # Model
     if config['decay_lr']:
         lr = tf.keras.optimizers.schedules.CosineDecay(config['learning_rate'], 
-                                                       config['decay_steps'])
+                                                       config['decay_steps'],
+                                                       config['alpha'])
     else:
         lr = config['learning_rate']
 
@@ -115,7 +120,7 @@ def train(args):
     model = GPT(vocab_size=config['vocab_size'], 
                 maxlen=config['seq_len'], emb_dim=config['emb_dim'],
                 heads=config['heads'], mlp_dim=config['mlp_dim'],
-                depth=config['depth'], rate=config['rate'], 
+                depth=config['depth'], rate=config['dropout'], 
                 initializer=config['initializer'])
 
     model.compile(optimizer)
@@ -137,11 +142,18 @@ def train(args):
         ckpt.restore(ckpt_manager.latest_checkpoint)
         print('Checkpoint restored from {} at step {}'.format(ckpt_manager.latest_checkpoint,
                                                                int(ckpt.step)))
+    else:
+        config_file = os.path.join(model_dir, model_dir + '_config.json')
+        json_config = json.dumps(config)
+        with open(config_file, 'w') as f:
+            f.write(json_config)
+        print(f'config {config_file} saved')
 
     # Train
     start_step = ckpt.step.numpy() + 1
     start = time.time()
 
+    #for step in range(start_step, steps):
     for step in range(start_step, steps):
         # Train loop
         inp, tar = train_ds.get_next()
@@ -151,11 +163,11 @@ def train(args):
         if step % config['ckpt_interval'] == 0 and step >= config['ckpt_interval']:
             print(f'\nTime taken for step {step} is: {time.time() - start:.2f} secs')
             print(f'Train loss: {model.train_loss_avg.result():.4f}')
+            print(f'lr: {model.optimizer.learning_rate(step)}')
 
             # Val loop
             start = time.time()
-            for _ in range(config['val_steps']):
-                inp, tar = val_ds.get_next()
+            for inp, tar in val_ds:
                 model.test_step(inp, tar)
 
             print(f'Time taken for validation is: {time.time() - start:.2f} secs')
@@ -169,10 +181,11 @@ def train(args):
             with writer.as_default():
                 tf.summary.scalar('train_loss', model.train_loss_avg.result(), step=step)
                 tf.summary.scalar('val_loss', model.test_loss_avg.result(), step=step)
+                tf.summary.scalar('lr', model.optimizer.learning_rate(step), step=step)
 
             # Checkpoint
             if model.test_loss_avg.result() < ckpt.best_loss.numpy():
-                ckpt.step.assign_add(config['ckpt_interval'])
+                ckpt.step.assign(step)
                 ckpt.best_loss.assign(model.test_loss_avg.result())
                 ckpt_manager.save(step)
                 print(f'Checkpoint saved at step {step}\n') 
@@ -184,12 +197,13 @@ def train(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', default='wiki_en_model')
+    parser.add_argument('--model_dir', default='openwt_model')
     parser.add_argument('--build_vocab', default=False)
     parser.add_argument('--steps', type=int, default=1000000)   
     parser.add_argument('--max_ckpt_to_keep', type=int, default=3)  
     parser.add_argument('--context', default='The world is')  
     parser.add_argument('--k', type=int, default=5)  
+    parser.add_argument('--ds_name', default='huggingface:openwebtext/plain_text')  
     args = parser.parse_args()
 
     train(args)

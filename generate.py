@@ -23,18 +23,18 @@ def generate(args):
     model = GPT(vocab_size=config['vocab_size'], 
                 maxlen=config['seq_len'], emb_dim=config['emb_dim'],
                 heads=config['heads'], mlp_dim=config['mlp_dim'],
-                depth=config['depth'], rate=config['rate'], 
+                depth=config['depth'], rate=config['dropout'], 
                 initializer=config['initializer'])
-
+                
     tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
         vocabulary=config['vocab_file'],
         sequence_length=config['seq_len'] + 1,
         lowercase=False,
     )
-
+    
     checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
     ckpt = tf.train.Checkpoint(model=model,
-                               step=tf.Variable(0))
+                               step=tf.Variable(0)) # initialize with big value
 
     ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
                                               max_to_keep=1)
@@ -54,7 +54,7 @@ def generate(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', default='model-1')
+    parser.add_argument('--model_dir', default='openwt_model')
     parser.add_argument('--context', default='The world is')  
     parser.add_argument('--k', type=int, default=5)  
     args = parser.parse_args()
