@@ -171,7 +171,8 @@ def train(args):
         if step % config['ckpt_interval'] == 0 and step >= config['ckpt_interval']:
             print(f'\nTime taken for step {step} is: {time.time() - start:.2f} secs')
             print(f'Train loss: {model.train_loss_avg.result():.4f}')
-            print(f'lr: {model.optimizer.learning_rate(step)}')
+            if config['decay_lr']:
+            	print(f'lr: {model.optimizer.learning_rate(step)}')
 
             # Val loop
             start = time.time()
@@ -189,7 +190,8 @@ def train(args):
             with writer.as_default():
                 tf.summary.scalar('train_loss', model.train_loss_avg.result(), step=step)
                 tf.summary.scalar('val_loss', model.test_loss_avg.result(), step=step)
-                tf.summary.scalar('lr', model.optimizer.learning_rate(step), step=step)
+                if config['decay_lr']:
+                	tf.summary.scalar('lr', model.optimizer.learning_rate(step), step=step)
 
             # Checkpoint
             if model.test_loss_avg.result() < ckpt.best_loss.numpy():
