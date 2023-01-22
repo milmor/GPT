@@ -86,7 +86,9 @@ def train(args):
                     config['min_seq_len'])
 
     if build_vocab:
-        build_vocabulary(raw_train_ds, vocab_size, vocab_file)
+        print('Creating vocabulary...')
+        build_vocabulary(raw_train_ds.take(50000), 
+        					config['vocab_size'], config['vocab_file'])
 
     tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
         vocabulary=config['vocab_file'],
@@ -99,6 +101,7 @@ def train(args):
                                     AUTOTUNE
     )
     train_ds = iter(train_ds)
+    test_input, _ = train_ds.get_next()
 
     val_ds = raw_val_ds.map(lambda x: preprocess(x, tokenizer), 
                             num_parallel_calls=tf.data.AUTOTUNE).prefetch(
@@ -124,19 +127,24 @@ def train(args):
                 initializer=config['initializer'])
 
     model.compile(optimizer)
+    model(test_input)
+    model.summary()
 
     # Checkpoint
     log_dir = os.path.join(model_dir, 'log-dir')
     writer = tf.summary.create_file_writer(log_dir)
 
     checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
+    best_checkpoint_dir = os.path.join(model_dir, 'best-training-checkpoints')
     ckpt = tf.train.Checkpoint(optimizer=optimizer,
                                model=model,
                                step=tf.Variable(0),
                                best_loss=tf.Variable(1000.0)) # initialize with big value
 
     ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
-                                              max_to_keep=max_ckpt_to_keep)
+                                              max_to_keep=1)
+    best_ckpt_manager = tf.train.CheckpointManager(ckpt, directory=best_checkpoint_dir, 
+													max_to_keep=max_ckpt_to_keep)
 
     if ckpt_manager.latest_checkpoint:    
         ckpt.restore(ckpt_manager.latest_checkpoint)
@@ -187,8 +195,13 @@ def train(args):
             if model.test_loss_avg.result() < ckpt.best_loss.numpy():
                 ckpt.step.assign(step)
                 ckpt.best_loss.assign(model.test_loss_avg.result())
+                best_ckpt_manager.save(step)
                 ckpt_manager.save(step)
-                print(f'Checkpoint saved at step {step}\n') 
+                print(f'Best checkpoint saved at step {step}\n') 
+            else:
+                ckpt.step.assign(step)
+                ckpt_manager.save(step)
+                print(f'Checkpoint saved at step {step}\n')             
 
             model.train_loss_avg.reset_states()
             model.test_loss_avg.reset_states()
@@ -201,7 +214,7 @@ def main():
     parser.add_argument('--build_vocab', default=False)
     parser.add_argument('--steps', type=int, default=1000000)   
     parser.add_argument('--max_ckpt_to_keep', type=int, default=3)  
-    parser.add_argument('--context', default='The world is')  
+    parser.add_argument('--context', default="Hello, I'm a language model")  
     parser.add_argument('--k', type=int, default=5)  
     parser.add_argument('--ds_name', default='huggingface:openwebtext/plain_text')  
     args = parser.parse_args()

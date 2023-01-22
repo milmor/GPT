@@ -6,6 +6,7 @@ Author: Emilio Morales (mil.mor.mor@gmail.com)
 import glob
 import time
 import tensorflow as tf
+import tensorflow_text as tf_text
 import keras_nlp
 
 
@@ -16,8 +17,7 @@ def sample(model, context, seq_len, vocab_file, k=10):
         sequence_length=None,
         lowercase=False
     )
-    
-    x = sample_tokenizer(context)
+    x = sample_tokenizer(tf_text.normalize_utf8(context, 'NFKD'))
     x = x[tf.newaxis, :]
     context_len = x.shape[1]
 
