@@ -161,7 +161,6 @@ def train(args):
     start_step = ckpt.step.numpy() + 1
     start = time.time()
 
-    #for step in range(start_step, steps):
     for step in range(start_step, steps):
         # Train loop
         inp, tar = train_ds.get_next()
