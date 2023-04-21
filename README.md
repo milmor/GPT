@@ -11,7 +11,7 @@ This repository is a simple and clean [GPT](https://cdn.openai.com/research-cove
 
 ## Usage
 ### Train
-The model is trained by default on the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. Use `--model_dir=<model_dir>` to provide the model directory name.
+The model is trained by default on the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. Use `--model_dir=<model_dir>` to specify the model directory name.
 ```
 python train.py --model_dir=<model_dir> 
 ```
