@@ -155,7 +155,7 @@ class GPT(tf.keras.models.Model):
         x = self.out(x)
         return x
     
-    @tf.function
+    @tf.function(jit_compile=True)
     def train_step(self, inp, tar):
         with tf.GradientTape() as tape:
             predictions = self(inp, training=True)
@@ -165,7 +165,7 @@ class GPT(tf.keras.models.Model):
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
         self.train_loss_avg(loss)
         
-    @tf.function
+    @tf.function(jit_compile=True)
     def test_step(self, inp, tar):
         predictions = self(inp, training=False)
         loss = self.loss_function(tar, predictions)
