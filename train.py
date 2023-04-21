@@ -160,9 +160,9 @@ def train(args):
     # Train
     start_step = ckpt.step.numpy() + 1
     start = time.time()
-
+    
+    # Train loop
     for step in range(start_step, steps):
-        # Train loop
         inp, tar = train_ds.get_next()
         model.train_step(inp, tar)
 
@@ -181,7 +181,7 @@ def train(args):
             print(f'Time taken for validation is: {time.time() - start:.2f} secs')
             print(f'Val loss: {model.test_loss_avg.result():.4f}')
 
-            generated_text = sample(model, 'The world is', 
+            generated_text = sample(model, context, 
                                 config['seq_len'], config['vocab_file'], k=k)
             print(f'Generated text:\n{generated_text}')
 
