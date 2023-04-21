@@ -21,7 +21,7 @@ Some other options:
 - The `model.py` functions are compiled with XLA. To disable XLA, set `jit_compile=False`.
 
 ### Generate
-Use `--model_dir=<model_dir>` and `--context=<context>` to provide the model directory name and context.
+Use `--model_dir=<model_dir>` and `--context=<context>` to specify the model directory name and context.
 ```
 python generate.py --model_dir=<model_dir> --context=<context>
 ```
