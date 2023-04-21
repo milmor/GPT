@@ -88,7 +88,7 @@ def train(args):
     if build_vocab:
         print('Creating vocabulary...')
         build_vocabulary(raw_train_ds.take(50000), 
-        					config['vocab_size'], config['vocab_file'])
+				config['vocab_size'], config['vocab_file'])
 
     tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
         vocabulary=config['vocab_file'],
@@ -144,7 +144,7 @@ def train(args):
     ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
                                               max_to_keep=1)
     best_ckpt_manager = tf.train.CheckpointManager(ckpt, directory=best_checkpoint_dir, 
-													max_to_keep=max_ckpt_to_keep)
+    							max_to_keep=max_ckpt_to_keep)
 
     if ckpt_manager.latest_checkpoint:    
         ckpt.restore(ckpt_manager.latest_checkpoint)
