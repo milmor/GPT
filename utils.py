@@ -3,34 +3,39 @@
 Author: Emilio Morales (mil.mor.mor@gmail.com)
         Mar 2022
 '''
-import glob
-import time
 import tensorflow as tf
 import tensorflow_text as tf_text
 import keras_nlp
 
 
-def sample(model, context, seq_len, vocab_file, k=10):  
-    # No padding tokenizer
+def sample(model, context, seq_len, vocab_file, k=10):
+    # Initialize tokenizer
     sample_tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
         vocabulary=vocab_file,
-        sequence_length=None,
         lowercase=False
     )
-    x = sample_tokenizer(tf_text.normalize_utf8(context, 'NFKD'))
-    x = x[tf.newaxis, :]
-    context_len = x.shape[1]
 
-    for i in range(context_len, seq_len):
-        x_pad = tf.keras.utils.pad_sequences(x, maxlen=seq_len, padding="post")
+    # Tokenize the given context
+    x = sample_tokenizer.tokenize(tf_text.normalize_utf8(context, 'NFKD'))
+    x = tf.expand_dims(x, 0)
+
+    # Generate new text by sampling from the model
+    for i in range(x.shape[1], seq_len):
+        # Pad the input sequence to seq_len
+        x_pad = tf.keras.preprocessing.sequence.pad_sequences(x, maxlen=seq_len, padding="post")
+        # Generate logits from the model
         logits = model(x_pad, training=False)
-
+        # Get the top k predictions and their probabilities
         logits, indices = tf.math.top_k(logits[:, i-1, :], k=k)
-        logits = tf.keras.activations.softmax(logits)
-        rand_idx = tf.random.categorical(logits, num_samples=1, dtype=tf.int32)
-        sample = indices[0][rand_idx[0][0]][tf.newaxis, tf.newaxis]
+        probabilities = tf.keras.activations.softmax(logits)
+        # Sample from the predicted probabilities
+        rand_idx = tf.random.categorical(probabilities, num_samples=1, dtype=tf.int32)
+        sample = indices[0][rand_idx[0][0]]
+        sample = tf.expand_dims(tf.expand_dims(sample, 0), 0)
+        # Concatenate the new token to the sequence
         x = tf.concat([x, sample], axis=-1)
 
+    # Detokenize the generated sequence
     try: 
         out_text = sample_tokenizer.detokenize(x).numpy()[0].decode('utf-8') 
     except:
