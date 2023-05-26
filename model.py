@@ -30,7 +30,7 @@ class MultiHeadAttention(layers.Layer):
         x = tf.reshape(x, (batch_size, -1, self.n_heads, self.head_dim))
         return tf.transpose(x, perm=[0, 2, 1, 3])
 
-    def call(self, q, k, v, mask):
+    def call(self, q, k, v, mask=None):
         batch_size = tf.shape(q)[0]
 
         q = self.wq(q)  
@@ -71,7 +71,7 @@ class TransformerBlock(layers.Layer):
         self.ln1 = layers.LayerNormalization(epsilon=eps)
         self.ln2 = layers.LayerNormalization(epsilon=eps)
 
-    def call(self, inputs, mask):
+    def call(self, inputs, mask=None):
         x = self.ln1(inputs)
         x = inputs + self.attn(x, x, x, mask) 
         x = x + self.mlp(self.ln2(x))
@@ -122,9 +122,20 @@ class GPT(tf.keras.models.Model):
     def compile(self, optimizer):
         super(GPT, self).compile()
         self.optimizer = optimizer
-        self.loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         self.train_loss_avg = tf.keras.metrics.Mean(name='train_loss')
         self.test_loss_avg = tf.keras.metrics.Mean(name='val_loss')
+
+    def loss_function(self, label, pred):
+        mask = label != 0
+        loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
+        from_logits=True, reduction='none')
+        loss = loss_object(label, pred)
+
+        mask = tf.cast(mask, dtype=loss.dtype)
+        loss *= mask
+
+        loss = tf.reduce_sum(loss)/tf.reduce_sum(mask)
+        return loss
         
     def get_padding_mask(self, seq):
         seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
@@ -158,8 +169,8 @@ class GPT(tf.keras.models.Model):
     @tf.function(jit_compile=True)
     def train_step(self, inp, tar):
         with tf.GradientTape() as tape:
-            predictions = self(inp, training=True)
-            loss = self.loss_function(tar, predictions)
+            pred = self(inp, training=True)
+            loss = self.loss_function(tar, pred)
         gradients = tape.gradient(loss, self.trainable_variables)
 
         self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
@@ -167,7 +178,7 @@ class GPT(tf.keras.models.Model):
         
     @tf.function(jit_compile=True)
     def test_step(self, inp, tar):
-        predictions = self(inp, training=False)
-        loss = self.loss_function(tar, predictions)
+        pred = self(inp, training=False)
+        loss = self.loss_function(tar, pred)
 
         self.test_loss_avg(loss)

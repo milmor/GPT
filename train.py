@@ -56,9 +56,9 @@ def build_vocabulary(dataset, vocab_size, vocab_file):
 
 
 def train(args):
-    print('\n#########')
+    print('\n#############')
     print('GPT Train')
-    print('#########\n')
+    print('#############\n')
     model_dir = args.model_dir
     build_vocab = args.build_vocab
     steps = args.steps

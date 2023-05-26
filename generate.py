@@ -13,9 +13,9 @@ from utils import *
 
 
 def generate(args):
-    print('\n############')
+    print('\n#############')
     print('GPT Generate')
-    print('############\n')
+    print('#############\n')
     model_dir = args.model_dir
     context = args.context
     k = args.k
