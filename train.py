@@ -216,7 +216,7 @@ def main():
     parser.add_argument('--steps', type=int, default=1000000)   
     parser.add_argument('--max_ckpt_to_keep', type=int, default=3)  
     parser.add_argument('--context', default="Hello, I'm a language model")  
-    parser.add_argument('--k', type=int, default=5)  
+    parser.add_argument('--k', type=int, default=10)  
     parser.add_argument('--ds_name', default='huggingface:openwebtext/plain_text')  
     args = parser.parse_args()
 

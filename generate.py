@@ -56,7 +56,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_dir', default='openwt_model')
     parser.add_argument('--context', default="Hello, I'm a language model")  
-    parser.add_argument('--k', type=int, default=5)  
+    parser.add_argument('--k', type=int, default=10)  
     args = parser.parse_args()
 
     generate(args)
