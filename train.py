@@ -134,8 +134,8 @@ def train(args):
     log_dir = os.path.join(model_dir, 'log-dir')
     writer = tf.summary.create_file_writer(log_dir)
 
-    checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
-    best_checkpoint_dir = os.path.join(model_dir, 'best-training-checkpoints')
+    checkpoint_dir = os.path.join(model_dir, 'ckpt')
+    best_checkpoint_dir = os.path.join(model_dir, 'best-ckpt')
     ckpt = tf.train.Checkpoint(optimizer=optimizer,
                                model=model,
                                step=tf.Variable(0),
@@ -148,8 +148,7 @@ def train(args):
 
     if ckpt_manager.latest_checkpoint:    
         ckpt.restore(ckpt_manager.latest_checkpoint)
-        print('Checkpoint restored from {} at step {}'.format(ckpt_manager.latest_checkpoint,
-                                                               int(ckpt.step)))
+        print(f'Checkpoint restored from {ckpt_manager.latest_checkpoint} at step {int(ckpt.step)}')
     else:
         config_file = os.path.join(model_dir, model_dir + '_config.json')
         json_config = json.dumps(config)
