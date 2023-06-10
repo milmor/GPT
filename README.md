@@ -1,10 +1,10 @@
 # GPT
-This repository is a simple and clean [GPT](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)  implementation in Tensorflow.
+This repository is a simple and clean [GPT](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)  implementation in TensorFlow.
 
 
 ## Dependencies
 - Python 3.11.2
-- TensorFow 2.12.0
+- TensorFlow 2.12.0
 - TensorFlow Text 2.12.1
 - TensorFlow Datasets 4.9.2
 - KerasNLP 0.4.1
@@ -28,7 +28,7 @@ python generate.py --model_dir=<model_dir> --context=<context>
 ```
 
 ### Pretrained GPT-Mini 
-To download and try the pretrained GPT-Mini, run `demo.ipynb`. If you want to fine-tune GPT-Mini using the pretrained weights, you will need to modify the code in the `demo.ipynb` notebook or create a new notebook specifically for fine-tuning.
+To download and try pretrained GPT-Mini, run `demo.ipynb`. If you want to fine-tune GPT-Mini using the pretrained weights, you will need to modify the code in the `demo.ipynb` notebook or create a new notebook specifically for fine-tuning.
 
 ### Hparams setting
 Adjust hyperparameters in the `config.py` file.
