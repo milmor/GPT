@@ -7,8 +7,8 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
 import tensorflow as tf
 import tensorflow_text as text
+import json
 from model import GPT
-from config import config
 from utils import *
 
 
@@ -19,6 +19,12 @@ def generate(args):
     model_dir = args.model_dir
     context = args.context
     k = args.k
+    
+    # Load config file
+    config_file = model_dir + "/" + model_dir + "_config.json"
+    with open(config_file) as f:
+    	config = json.load(f)
+    	print(f'{config_file} restored')
 
     model = GPT(vocab_size=config['vocab_size'], 
                 maxlen=config['seq_len'], emb_dim=config['emb_dim'],
@@ -32,7 +38,7 @@ def generate(args):
         lowercase=False,
     )
     
-    checkpoint_dir = os.path.join(model_dir, 'training-checkpoints')
+    checkpoint_dir = os.path.join(model_dir, 'best-ckpt')
     ckpt = tf.train.Checkpoint(model=model,
                                step=tf.Variable(0)) # initialize with big value
 
@@ -41,8 +47,7 @@ def generate(args):
 
     if ckpt_manager.latest_checkpoint:    
         ckpt.restore(ckpt_manager.latest_checkpoint).expect_partial()
-        print('Checkpoint restored from {} at step {}'.format(ckpt_manager.latest_checkpoint,
-                                                               int(ckpt.step)))
+        print(f'Checkpoint restored from {ckpt_manager.latest_checkpoint} at step {int(ckpt.step)}')
 
     generated_text = sample(model, context, config['seq_len'],
                             config['vocab_file'], k=k)
