@@ -26,12 +26,11 @@ def sample(model, context, seq_len, vocab_file, k=10):
         # Generate logits from the model
         logits = model(x_pad, training=False)
         # Get the top k predictions and their probabilities
-        logits, indices = tf.math.top_k(logits[:, i-1, :], k=k)
-        probabilities = tf.keras.activations.softmax(logits)
+        logits, indices = tf.math.top_k(logits[:, i-1, :], k=k, sorted=False)
         # Sample from the predicted probabilities
-        rand_idx = tf.random.categorical(probabilities, num_samples=1, dtype=tf.int32)
-        sample = indices[0][rand_idx[0][0]]
-        sample = tf.expand_dims(tf.expand_dims(sample, 0), 0)
+        rand_idx = tf.random.categorical(tf.math.log(logits), num_samples=1, dtype=tf.int32)
+        sample = tf.gather_nd(indices, rand_idx, batch_dims=1)
+        sample = tf.expand_dims(sample, 0)
         # Concatenate the new token to the sequence
         x = tf.concat([x, sample], axis=-1)
 
