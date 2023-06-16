@@ -8,19 +8,16 @@ import tensorflow_text as tf_text
 import keras_nlp
 
 
-def sample(model, context, seq_len, vocab_file, k=10):
+def sample(model, context, seq_len, max_len, k=10):
     # Initialize tokenizer
-    sample_tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-        vocabulary=vocab_file,
-        lowercase=False
-    )
+    sample_tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en")
 
     # Tokenize the given context
     x = sample_tokenizer.tokenize(tf_text.normalize_utf8(context, 'NFKD'))
     x = tf.expand_dims(x, 0)
 
     # Generate new text by sampling from the model
-    for i in range(x.shape[1], seq_len):
+    for i in range(x.shape[1], max_len):
         # Pad the input sequence to seq_len
         x_pad = tf.keras.preprocessing.sequence.pad_sequences(x, maxlen=seq_len, padding="post")
         # Generate logits from the model
@@ -35,10 +32,7 @@ def sample(model, context, seq_len, vocab_file, k=10):
         x = tf.concat([x, sample], axis=-1)
 
     # Detokenize the generated sequence
-    try: 
-        out_text = sample_tokenizer.detokenize(x).numpy()[0].decode('utf-8') 
-    except:
-        print("utf-8' codec can't decode byte")
+    out_text = sample_tokenizer.detokenize(x).numpy()[0].decode('utf-8', errors='replace') 
     return out_text
 
 

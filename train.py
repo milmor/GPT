@@ -18,11 +18,7 @@ from config import config
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
-def create_ds(dataset, batch_size, min_seq_len=False, buffer_size=None):
-    if min_seq_len:
-        dataset = (
-            dataset.filter(lambda x: tf.strings.length(x['text']) > min_seq_len)
-        )
+def create_ds(dataset, batch_size, buffer_size=None):
     dataset = (
         dataset.map(lambda x: tf_text.normalize_utf8(x['text'], 'NFKD'), 
                     num_parallel_calls=AUTOTUNE)
@@ -39,20 +35,6 @@ def preprocess(inputs, tokenizer):
     x = tokenized_text[:, :-1]
     y = tokenized_text[:, 1:]
     return x, y
-    
-    
-def build_vocabulary(dataset, vocab_size, vocab_file):
-    start = time.time()
-    vocab = keras_nlp.tokenizers.compute_word_piece_vocabulary(
-        dataset,
-        vocabulary_size=vocab_size,
-        lowercase=False,
-        reserved_tokens=["[PAD]", "[UNK]", "[BOS]"],
-    )
-
-    print(f'Time for generate vocab is {time.time()-start:.4f} sec')
-    write_vocab_file(vocab_file, vocab)
-    print(f'{vocab_file} saved')
 
 
 def train(args):
@@ -60,10 +42,10 @@ def train(args):
     print('GPT Train')
     print('#############\n')
     model_dir = args.model_dir
-    build_vocab = args.build_vocab
     steps = args.steps
     max_ckpt_to_keep = args.max_ckpt_to_keep
     context = args.context
+    max_len = args.max_len
     k = args.k
     ds_name = args.ds_name
     print(config)
@@ -81,20 +63,11 @@ def train(args):
     print(f'\nTrain size: {len(raw_train_ds)} Val size: {len(raw_val_ds)}')
 
     raw_train_ds = create_ds(raw_train_ds, config['batch_size'], 
-                    config['min_seq_len'], config['buffer_size'])
-    raw_val_ds = create_ds(raw_val_ds, config['batch_size'], 
-                    config['min_seq_len'])
+                    config['buffer_size'])
+    raw_val_ds = create_ds(raw_val_ds, config['batch_size'])
 
-    if build_vocab:
-        print('Creating vocabulary...')
-        build_vocabulary(raw_train_ds.take(50000), 
-				config['vocab_size'], config['vocab_file'])
-
-    tokenizer = keras_nlp.tokenizers.WordPieceTokenizer(
-        vocabulary=config['vocab_file'],
-        sequence_length=config['seq_len'] + 1,
-        lowercase=False,
-    )
+    tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en", 
+			sequence_length=config['seq_len'] + 1)
 
     train_ds = raw_train_ds.map(lambda x: preprocess(x, tokenizer), 
                                 num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
@@ -180,8 +153,7 @@ def train(args):
             print(f'Time taken for validation is: {time.time() - start:.2f} secs')
             print(f'Val loss: {model.test_loss_avg.result():.4f}')
 
-            generated_text = sample(model, context, 
-                                config['seq_len'], config['vocab_file'], k=k)
+            generated_text = sample(model, context, config['seq_len'], max_len, k=k)
             print(f'Generated text:\n{generated_text}')
 
             # Tensorboard
@@ -211,10 +183,10 @@ def train(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_dir', default='openwt_model')
-    parser.add_argument('--build_vocab', default=False)
     parser.add_argument('--steps', type=int, default=1000000)   
     parser.add_argument('--max_ckpt_to_keep', type=int, default=3)  
     parser.add_argument('--context', default="Hello, I'm a language model")  
+    parser.add_argument('--max_len', type=int, default=512)  
     parser.add_argument('--k', type=int, default=10)  
     parser.add_argument('--ds_name', default='huggingface:openwebtext/plain_text')  
     args = parser.parse_args()

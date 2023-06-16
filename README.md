@@ -7,7 +7,7 @@ This repository is a simple and clean [GPT](https://cdn.openai.com/research-cove
 - TensorFlow 2.12.0
 - TensorFlow Text 2.12.1
 - TensorFlow Datasets 4.9.2
-- KerasNLP 0.4.1
+- KerasNLP 0.5.2
 - Datasets 2.11.0
 
 ## Usage
@@ -18,7 +18,6 @@ python train.py --model_dir=<model_dir>
 ```
 
 Some other options:
-- Use `--build_vocab=True` to build a WordPiece vocabulary.
 - The `model.py` functions are compiled with XLA. To disable XLA, set `jit_compile=False`.
 
 ### Generate
@@ -44,7 +43,6 @@ Run `tensorboard --logdir ./`.
 - [minGPT](https://github.com/karpathy/minGPT)
 
 Implementation notes:
-- WordPiece tokenization
 - The `model.py` functions are compiled with XLA
 
 ## Licence
