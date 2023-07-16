@@ -1,13 +1,12 @@
 config = {'batch_size': 16,
           'buffer_size': 40000, # shuffle buffer size
           'shuffle_seed': 32, # train / val split seed
-          'vocab_file': 'wiki_en_vocab',
           'min_seq_len': False,
           'ckpt_interval': 2000, # 2000,
           'val_steps': 1000, #1000,
           'train_size': 95, # 95% train / 5% val,
           # hparams
-          'vocab_size': 50257,
+          'vocab_size': 50257, # gpt-2 vocab size
           'seq_len': 512,
           'learning_rate': 0.001,
           'beta_1': 0.9,
