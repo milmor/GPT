@@ -99,14 +99,15 @@ class TokenEmbedding(layers.Layer):
         
         
 class GPT(tf.keras.models.Model):
-    def __init__(self, vocab_size=50000, maxlen=512, 
+    def __init__(self, vocab_size=50000, seq_len=512, 
                  emb_dim=256, heads=8, mlp_dim=256, depth=10, 
                  rate=0.1, initializer='glorot_uniform', 
                  embedding_initializer='glorot_uniform', eps=1e-6,
                  mlp_activation='gelu'):
         super(GPT, self).__init__()
+        self.seq_len = seq_len
         self.depth = depth
-        self.tok_emb = TokenEmbedding(maxlen, vocab_size, 
+        self.tok_emb = TokenEmbedding(seq_len, vocab_size, 
                         emb_dim, rate=rate, initializer=embedding_initializer)
         self.drop = layers.Dropout(rate)
             
@@ -182,3 +183,10 @@ class GPT(tf.keras.models.Model):
         loss = self.loss_function(tar, pred)
 
         self.test_loss_avg(loss)
+
+    def restore(self, ckpt_dir):
+        ckpt = tf.train.Checkpoint(model=self, step=tf.Variable(0))
+        ckpt_manager = tf.train.CheckpointManager(ckpt, directory=ckpt_dir, 
+                                                  max_to_keep=1)
+        ckpt.restore(ckpt_manager.latest_checkpoint)
+        print(f'Checkpoint restored from {ckpt_manager.latest_checkpoint} at step {int(ckpt.step)}')

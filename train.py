@@ -94,7 +94,7 @@ def train(args):
                         beta_2=config['beta_2'])
 
     model = GPT(vocab_size=config['vocab_size'], 
-                maxlen=config['seq_len'], emb_dim=config['emb_dim'],
+                seq_len=config['seq_len'], emb_dim=config['emb_dim'],
                 heads=config['heads'], mlp_dim=config['mlp_dim'],
                 depth=config['depth'], rate=config['dropout'], 
                 initializer=config['initializer'])
@@ -153,7 +153,7 @@ def train(args):
             print(f'Time taken for validation is: {time.time() - start:.2f} secs')
             print(f'Val loss: {model.test_loss_avg.result():.4f}')
 
-            generated_text = sample(model, context, config['seq_len'], max_len, k=k)
+            generated_text = sample(model, context, max_len, k=k)
             print(f'Generated text:\n{generated_text}')
 
             # Tensorboard
@@ -188,7 +188,7 @@ def main():
     parser.add_argument('--context', default="Hello, I'm a language model")  
     parser.add_argument('--max_len', type=int, default=512)  
     parser.add_argument('--k', type=int, default=10)  
-    parser.add_argument('--ds_name', default='huggingface:openwebtext/plain_text')  
+    parser.add_argument('--ds_name', default='openwebtext/plain_text')  
     args = parser.parse_args()
 
     train(args)
@@ -196,4 +196,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
