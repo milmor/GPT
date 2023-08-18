@@ -28,25 +28,17 @@ def generate(args):
     	print(f'{config_file} restored')
 
     model = GPT(vocab_size=config['vocab_size'], 
-                maxlen=config['seq_len'], emb_dim=config['emb_dim'],
+                seq_len=config['seq_len'], emb_dim=config['emb_dim'],
                 heads=config['heads'], mlp_dim=config['mlp_dim'],
                 depth=config['depth'], rate=config['dropout'], 
                 initializer=config['initializer'])
                 
     tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en", 
 					sequence_length=config['seq_len'])
-    checkpoint_dir = os.path.join(model_dir, 'best-ckpt')
-    ckpt = tf.train.Checkpoint(model=model,
-                               step=tf.Variable(0)) # initialize with big value
+    ckpt_dir = os.path.join(model_dir, 'best-ckpt')
 
-    ckpt_manager = tf.train.CheckpointManager(ckpt, directory=checkpoint_dir, 
-                                              max_to_keep=1)
-
-    if ckpt_manager.latest_checkpoint:    
-        ckpt.restore(ckpt_manager.latest_checkpoint).expect_partial()
-        print(f'Checkpoint restored from {ckpt_manager.latest_checkpoint} at step {int(ckpt.step)}')
-
-    generated_text = sample(model, context, config['seq_len'], max_len, k=k)
+    model.restore(ckpt_dir)
+    generated_text = sample(model, context, max_len, k=k)
     print(f'\nGenerated text:\n{generated_text}')
 
     with open('generate.txt', 'w') as f:

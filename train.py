@@ -109,7 +109,7 @@ def train(args):
 
     checkpoint_dir = os.path.join(model_dir, 'ckpt')
     best_checkpoint_dir = os.path.join(model_dir, 'best-ckpt')
-    ckpt = tf.train.Checkpoint(optimizer=optimizer,
+    ckpt = tf.train.Checkpoint(optimizer=model.optimizer,
                                model=model,
                                step=tf.Variable(0),
                                best_loss=tf.Variable(1000.0)) # initialize with big value

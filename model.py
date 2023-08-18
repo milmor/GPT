@@ -188,5 +188,5 @@ class GPT(tf.keras.models.Model):
         ckpt = tf.train.Checkpoint(model=self, step=tf.Variable(0))
         ckpt_manager = tf.train.CheckpointManager(ckpt, directory=ckpt_dir, 
                                                   max_to_keep=1)
-        ckpt.restore(ckpt_manager.latest_checkpoint)
+        ckpt.restore(ckpt_manager.latest_checkpoint).expect_partial()
         print(f'Checkpoint restored from {ckpt_manager.latest_checkpoint} at step {int(ckpt.step)}')
