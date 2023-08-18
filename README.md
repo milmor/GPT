@@ -3,12 +3,12 @@ This repository is a simple and clean [GPT](https://cdn.openai.com/research-cove
 
 
 ## Dependencies
-- Python 3.11.2
+- Python 3.9.16
 - TensorFlow 2.12.0
 - TensorFlow Text 2.12.1
 - TensorFlow Datasets 4.9.2
 - KerasNLP 0.5.2
-- Datasets 2.11.0
+- Datasets 2.13.0
 
 ## Usage
 ### Train
