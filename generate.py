@@ -21,6 +21,7 @@ def generate(args, conf):
     context = args.context
     max_len = args.max_len
     k = args.k
+    temp = args.temp
     
     # Load config file
     model = GPT(vocab_size=conf.vocab_size, 
@@ -34,7 +35,7 @@ def generate(args, conf):
     ckpt_dir = os.path.join(model_dir, 'best-ckpt')
 
     model.restore(ckpt_dir)
-    generated_text = sample(model, context, max_len, k=k)
+    generated_text = sample(model, context, max_len, k=k, temperature=temp)
     print(f'\nGenerated text:\n{generated_text}')
 
     with open('generate.txt', 'w') as f:
@@ -46,7 +47,8 @@ def main():
     parser.add_argument('--model_dir', default='openwt_model')
     parser.add_argument('--context', default="Hello, I'm a language model")  
     parser.add_argument('--max_len', type=int, default=512)  
-    parser.add_argument('--k', type=int, default=10)  
+    parser.add_argument('--k', type=int, default=50) 
+    parser.add_argument('--temp', type=float, default=0.9)  
     args = parser.parse_args()
     conf = Config(config, args.model_dir)
     generate(args, conf)
