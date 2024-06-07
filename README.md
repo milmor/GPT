@@ -12,18 +12,18 @@ This repository is a simple and clean [GPT](https://cdn.openai.com/research-cove
 
 ## Usage
 ### Train
-The model is trained by default on the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. Use `--model_dir=<model_dir>` to specify the model directory name.
+The model is trained by default on the [OpenWebText](https://huggingface.co/datasets/openwebtext) dataset. Use `--model_name=<model_name>` to specify the model directory name.
 ```
-python train.py --model_dir=<model_dir> 
+python train.py --model_name=<model_name> 
 ```
 
 Some other options:
 - The `model.py` functions are compiled with XLA. To disable XLA, set `jit_compile=False`.
 
 ### Generate
-Use `--model_dir=<model_dir>` and `--context=<context>` to specify the model directory name and context.
+Use `--model_name=<model_name>` and `--context=<context>` to specify the model directory name and context.
 ```
-python generate.py --model_dir=openwt_512_d_512 --context="Hello, I'm a language model" --k=50 --temp=0.9
+python generate.py --model_name=openwt_512_d_512 --context="Hello, I'm a language model" --k=50 --temp=0.9
 ```
 This generates the following:
 ```
