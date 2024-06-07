@@ -119,6 +119,8 @@ class GPT(tf.keras.models.Model):
 
         self.layernorm = layers.LayerNormalization(epsilon=eps)
         self.out = layers.Dense(vocab_size, kernel_initializer=initializer)
+        # init model with forward pass
+        self(tf.ones([1, self.seq_len]))
         
     def compile(self, optimizer):
         super(GPT, self).compile()

@@ -18,7 +18,6 @@ from config import config
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
-
 def create_ds(dataset, batch_size, buffer_size=None):
     dataset = (
         dataset.map(lambda x: tf_text.normalize_utf8(x['text'], 'NFKD'), 
@@ -67,12 +66,10 @@ def train(args, conf):
 			sequence_length=conf.seq_len + 1)
 
     train_ds = raw_train_ds.map(lambda x: preprocess(x, tokenizer), 
-                                num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
+                num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
                                     AUTOTUNE
     )
     train_ds = iter(train_ds)
-    test_input, _ = train_ds.get_next()
-
     val_ds = raw_val_ds.map(lambda x: preprocess(x, tokenizer), 
                             num_parallel_calls=tf.data.AUTOTUNE).prefetch(
                                 AUTOTUNE
@@ -97,7 +94,6 @@ def train(args, conf):
                 initializer=conf.initializer)
 
     model.compile(optimizer)
-    model(test_input)
     model.summary()
 
     # Checkpoint
