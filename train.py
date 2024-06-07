@@ -39,7 +39,7 @@ def train(args, conf):
     print('\n#############')
     print('GPT Train')
     print('#############\n')
-    model_dir = args.model_dir
+    model_name = args.model_name
     steps = args.steps
     max_ckpt_to_keep = args.max_ckpt_to_keep
     context = args.context
@@ -98,11 +98,11 @@ def train(args, conf):
     model.summary()
 
     # Checkpoint
-    log_dir = os.path.join(model_dir, 'log-dir')
+    log_dir = os.path.join(model_name, 'log-dir')
     writer = tf.summary.create_file_writer(log_dir)
 
-    checkpoint_dir = os.path.join(model_dir, 'ckpt')
-    best_checkpoint_dir = os.path.join(model_dir, 'best-ckpt')
+    checkpoint_dir = os.path.join(model_name, 'ckpt')
+    best_checkpoint_dir = os.path.join(model_name, 'best-ckpt')
     ckpt = tf.train.Checkpoint(optimizer=model.optimizer,
                                model=model,
                                step=tf.Variable(0),
@@ -172,7 +172,7 @@ def train(args, conf):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', default='openwt_model')
+    parser.add_argument('--model_name', default='openwt_model')
     parser.add_argument('--steps', type=int, default=1000000)   
     parser.add_argument('--max_ckpt_to_keep', type=int, default=3)  
     parser.add_argument('--context', default="Hello, I'm a language model")  
@@ -181,7 +181,7 @@ def main():
     parser.add_argument('--temp', type=float, default=0.9) 
     parser.add_argument('--ds_name', default='openwebtext/plain_text')  
     args = parser.parse_args()
-    conf = Config(config, args.model_dir)
+    conf = Config(config, args.model_name)
     train(args, conf)
 
 

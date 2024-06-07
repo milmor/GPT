@@ -17,7 +17,7 @@ def generate(args, conf):
     print('\n#############')
     print('GPT Generate')
     print('#############\n')
-    model_dir = args.model_dir
+    model_name = args.model_name
     context = args.context
     max_len = args.max_len
     k = args.k
@@ -32,7 +32,7 @@ def generate(args, conf):
                 
     tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en", 
 					sequence_length=conf.seq_len)
-    ckpt_dir = os.path.join(model_dir, 'best-ckpt')
+    ckpt_dir = os.path.join(model_name, 'best-ckpt')
 
     model.restore(ckpt_dir)
     generated_text = sample(model, context, max_len, k=k, temperature=temp)
@@ -44,13 +44,13 @@ def generate(args, conf):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', default='openwt_model')
+    parser.add_argument('--model_name', default='openwt_model')
     parser.add_argument('--context', default="Hello, I'm a language model")  
     parser.add_argument('--max_len', type=int, default=512)  
     parser.add_argument('--k', type=int, default=50) 
     parser.add_argument('--temp', type=float, default=0.9)  
     args = parser.parse_args()
-    conf = Config(config, args.model_dir)
+    conf = Config(config, args.model_name)
     generate(args, conf)
 
 
