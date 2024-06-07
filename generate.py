@@ -23,15 +23,12 @@ def generate(args, conf):
     k = args.k
     temp = args.temp
     
-    # Load config file
     model = GPT(vocab_size=conf.vocab_size, 
                 seq_len=conf.seq_len, emb_dim=conf.emb_dim,
                 heads=conf.heads, mlp_dim=conf.mlp_dim,
                 depth=conf.depth, rate=conf.dropout, 
                 initializer=conf.initializer)
                 
-    tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en", 
-					sequence_length=conf.seq_len)
     ckpt_dir = os.path.join(model_name, 'best-ckpt')
 
     model.restore(ckpt_dir)
