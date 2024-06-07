@@ -2,9 +2,9 @@
 Author: Emilio Morales (mil.mor.mor@gmail.com)
         Mar 2022
 '''
-import argparse
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Disable tensorflow debugging logs
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Disable tensorflow debugging logs
+import argparse
 import time
 import tensorflow as tf
 import tensorflow_text as tf_text
@@ -18,6 +18,7 @@ from config import config
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
+
 def create_ds(dataset, batch_size, buffer_size=None):
     dataset = (
         dataset.map(lambda x: tf_text.normalize_utf8(x['text'], 'NFKD'), 
@@ -28,16 +29,14 @@ def create_ds(dataset, batch_size, buffer_size=None):
 
     dataset = dataset.batch(batch_size)
     return dataset
-    
-    
+
 def preprocess(inputs, tokenizer):
     tokenized_text = tokenizer(inputs)
     x = tokenized_text[:, :-1]
     y = tokenized_text[:, 1:]
     return x, y
 
-
-def train(args):
+def train(args, conf):
     print('\n#############')
     print('GPT Train')
     print('#############\n')
@@ -48,26 +47,24 @@ def train(args):
     max_len = args.max_len
     k = args.k
     ds_name = args.ds_name
-    print(config)
 
     # Dataset
     read_config = tfds.ReadConfig(
-        shuffle_seed=config['shuffle_seed'],
+        shuffle_seed=conf.shuffle_seed,
     )
-    train_size = config['train_size']
+    train_size = conf.train_size
     raw_train_ds, raw_val_ds = tfds.load(ds_name, 
                                 split=[f'train[:{train_size}%]', 
                                        f'train[{train_size}%:]'],
                                 shuffle_files=True, read_config=read_config)
-    raw_val_ds = raw_val_ds.take(config['batch_size']*config['val_steps'])
+    raw_val_ds = raw_val_ds.take(conf.batch_size * conf.val_steps)
     print(f'\nTrain size: {len(raw_train_ds)} Val size: {len(raw_val_ds)}')
 
-    raw_train_ds = create_ds(raw_train_ds, config['batch_size'], 
-                    config['buffer_size'])
-    raw_val_ds = create_ds(raw_val_ds, config['batch_size'])
+    raw_train_ds = create_ds(raw_train_ds, conf.batch_size, conf.buffer_size)
+    raw_val_ds = create_ds(raw_val_ds, conf.batch_size)
 
     tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en", 
-			sequence_length=config['seq_len'] + 1)
+			sequence_length=conf.seq_len + 1)
 
     train_ds = raw_train_ds.map(lambda x: preprocess(x, tokenizer), 
                                 num_parallel_calls=tf.data.AUTOTUNE).repeat().prefetch(
@@ -82,22 +79,22 @@ def train(args):
     )
 
     # Model
-    if config['decay_lr']:
-        lr = tf.keras.optimizers.schedules.CosineDecay(config['learning_rate'], 
-                                                       config['decay_steps'],
-                                                       config['alpha'])
+    if conf.decay_lr:
+        lr = tf.keras.optimizers.schedules.CosineDecay(conf.learning_rate, 
+                                                       conf.decay_steps,
+                                                       conf.alpha)
     else:
-        lr = config['learning_rate']
+        lr = conf.learning_rate
 
     optimizer = tf.keras.optimizers.Adam(lr, 
-                        beta_1=config['beta_1'], 
-                        beta_2=config['beta_2'])
+                        beta_1=conf.beta_1, 
+                        beta_2=conf.beta_2)
 
-    model = GPT(vocab_size=config['vocab_size'], 
-                seq_len=config['seq_len'], emb_dim=config['emb_dim'],
-                heads=config['heads'], mlp_dim=config['mlp_dim'],
-                depth=config['depth'], rate=config['dropout'], 
-                initializer=config['initializer'])
+    model = GPT(vocab_size=conf.vocab_size, 
+                seq_len=conf.seq_len, emb_dim=conf.emb_dim,
+                heads=conf.heads, mlp_dim=conf.mlp_dim,
+                depth=conf.depth, rate=conf.dropout, 
+                initializer=conf.initializer)
 
     model.compile(optimizer)
     model(test_input)
@@ -121,13 +118,9 @@ def train(args):
 
     if ckpt_manager.latest_checkpoint:    
         ckpt.restore(ckpt_manager.latest_checkpoint)
-        print(f'Checkpoint restored from {ckpt_manager.latest_checkpoint} at step {int(ckpt.step)}')
+        print(f'Checkpoint restored from {ckpt_manager.latest_checkpoint} at step {int(ckpt.step.numpy())}')
     else:
-        config_file = os.path.join(model_dir, model_dir + '_config.json')
-        json_config = json.dumps(config)
-        with open(config_file, 'w') as f:
-            f.write(json_config)
-        print(f'config {config_file} saved')
+        print(f'New model')
 
     # Train
     start_step = ckpt.step.numpy() + 1
@@ -139,10 +132,10 @@ def train(args):
         model.train_step(inp, tar)
 
         # Eval step
-        if step % config['ckpt_interval'] == 0 and step >= config['ckpt_interval']:
+        if step % conf.ckpt_interval == 0 and step >= conf.ckpt_interval:
             print(f'\nTime taken for step {step} is: {time.time() - start:.2f} secs')
             print(f'Train loss: {model.train_loss_avg.result():.4f}')
-            if config['decay_lr']:
+            if conf.decay_lr:
             	print(f'lr: {model.optimizer.learning_rate(step)}')
 
             # Val loop
@@ -160,7 +153,7 @@ def train(args):
             with writer.as_default():
                 tf.summary.scalar('train_loss', model.train_loss_avg.result(), step=step)
                 tf.summary.scalar('val_loss', model.test_loss_avg.result(), step=step)
-                if config['decay_lr']:
+                if conf.decay_lr:
                 	tf.summary.scalar('lr', model.optimizer.learning_rate(step), step=step)
 
             # Checkpoint
@@ -190,8 +183,8 @@ def main():
     parser.add_argument('--k', type=int, default=10)  
     parser.add_argument('--ds_name', default='openwebtext/plain_text')  
     args = parser.parse_args()
-
-    train(args)
+    conf = Config(config, args.model_dir)
+    train(args, conf)
 
 
 if __name__ == '__main__':

@@ -10,9 +10,10 @@ import tensorflow_text as text
 import json
 from model import GPT
 from utils import *
+from config import config
 
 
-def generate(args):
+def generate(args, conf):
     print('\n#############')
     print('GPT Generate')
     print('#############\n')
@@ -22,19 +23,14 @@ def generate(args):
     k = args.k
     
     # Load config file
-    config_file = model_dir + "/" + model_dir + "_config.json"
-    with open(config_file) as f:
-    	config = json.load(f)
-    	print(f'{config_file} restored')
-
-    model = GPT(vocab_size=config['vocab_size'], 
-                seq_len=config['seq_len'], emb_dim=config['emb_dim'],
-                heads=config['heads'], mlp_dim=config['mlp_dim'],
-                depth=config['depth'], rate=config['dropout'], 
-                initializer=config['initializer'])
+    model = GPT(vocab_size=conf.vocab_size, 
+                seq_len=conf.seq_len, emb_dim=conf.emb_dim,
+                heads=conf.heads, mlp_dim=conf.mlp_dim,
+                depth=conf.depth, rate=conf.dropout, 
+                initializer=conf.initializer)
                 
     tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en", 
-					sequence_length=config['seq_len'])
+					sequence_length=conf.seq_len)
     ckpt_dir = os.path.join(model_dir, 'best-ckpt')
 
     model.restore(ckpt_dir)
@@ -52,8 +48,8 @@ def main():
     parser.add_argument('--max_len', type=int, default=512)  
     parser.add_argument('--k', type=int, default=10)  
     args = parser.parse_args()
-
-    generate(args)
+    conf = Config(config, args.model_dir)
+    generate(args, conf)
 
 
 if __name__ == '__main__':
