@@ -120,6 +120,7 @@ def train(args, conf):
         print(f'New model')
 
     # Train
+    tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en")
     start_step = ckpt.step.numpy() + 1
     start = time.time()
     
@@ -143,7 +144,7 @@ def train(args, conf):
             print(f'Time taken for validation is: {time.time() - start:.2f} secs')
             print(f'Val loss: {model.test_loss_avg.result():.4f}')
 
-            generated_text = sample(model, context, max_len, k=k, temperature=temp)
+            generated_text = sample(model, tokenizer, context, max_len, k=k, temperature=temp)
             print(f'Generated text:\n{generated_text}')
 
             # Tensorboard

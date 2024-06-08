@@ -11,29 +11,38 @@ from huggingface_hub import hf_hub_download
 import json
 
 
-def sample(model, context, max_len, k=10, temperature=1.0, seed=None):
-    sample_tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en")
-    x = sample_tokenizer.tokenize(tf_text.normalize_utf8(context, 'NFKD'))
+def next_token(x, i, model, temperature, k):
+    logits = model(x, training=False) / temperature
+    logits, indices = tf.math.top_k(logits[:, i-1, :], k=k, sorted=False)
+    probabilities = tf.nn.softmax(logits, axis=-1)
+    rand_idx = tf.random.categorical(tf.math.log(probabilities), num_samples=1, dtype=tf.int32)
+    sample = tf.gather_nd(indices, rand_idx, batch_dims=1)
+
+    # Set the value at position i in x to sample
+    x = tf.tensor_scatter_nd_update(x, [[0, i]], sample)
+    return x
+
+def sample(model, tokenizer, context, max_len, k=10, temperature=1.0, seed=None):
+    x = tokenizer.tokenize(tf_text.normalize_utf8(context, 'NFKD'))
     x = tf.expand_dims(x, 0)
+    start_len = x.shape[1]
+    x = tf.keras.preprocessing.sequence.pad_sequences(x, 
+        maxlen=model.seq_len, padding="post"
+    )
 
     if seed is not None:
         tf.random.set_seed(seed)
 
-    for i in range(x.shape[1], max_len):
-        x_pad = tf.keras.preprocessing.sequence.pad_sequences(x, 
-            maxlen=model.seq_len, padding="post"
-        )
-        logits = model(x_pad, training=False) / temperature
-        logits, indices = tf.math.top_k(logits[:, i-1, :], k=k, sorted=False)
-        probabilities = tf.nn.softmax(logits, axis=-1)
-        rand_idx = tf.random.categorical(tf.math.log(probabilities), 
-            num_samples=1, dtype=tf.int32
-        )
-        sample = tf.gather_nd(indices, rand_idx, batch_dims=1)
-        sample = tf.expand_dims(sample, 0)
-        x = tf.concat([x, sample], axis=-1)
+    for i in range(start_len, max_len):
+        x = next_token(x, i, model, temperature, k)
+    
+    # Find the first occurrence of zero and truncate the sequence at that point
+    zero_positions = tf.where(tf.equal(x, 0))
+    if tf.size(zero_positions) > 0:
+        first_zero_pos = zero_positions[0, 1]  # Get the position of the first zero
+        x = x[:, :first_zero_pos]
 
-    out_text = sample_tokenizer.detokenize(x).numpy()[0].decode('utf-8', errors='replace') 
+    out_text = tokenizer.detokenize(x).numpy()[0].decode('utf-8', errors='replace') 
     return out_text
 
 

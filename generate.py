@@ -32,7 +32,8 @@ def generate(args, conf):
     ckpt_dir = os.path.join(model_name, 'best-ckpt')
 
     model.restore(ckpt_dir)
-    generated_text = sample(model, context, max_len, k=k, temperature=temp)
+    tokenizer = keras_nlp.models.GPT2Tokenizer.from_preset("gpt2_base_en")
+    generated_text = sample(model, tokenizer, context, max_len, k=k, temperature=temp)
     print(f'\nGenerated text:\n{generated_text}')
 
     with open('generate.txt', 'w') as f:
